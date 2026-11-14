@@ -27,10 +27,10 @@ const int margin = 12;
 const int header_height = 22;
 const int row_height = 18;
 const int chips_per_row = 4;
-const int chip_height = 36;
+const int chip_height = 44;
 const int chip_gap = 4;
 const int icon_size = 16;
-const int icon_gap = 2;
+const int icon_gap = 5;
 const int max_icons = 3;
 const int link_height = 20;
 const int link_gap = 10;
@@ -202,12 +202,13 @@ void draw_chip( HDC dc, const desktop_tile &tile, const RECT &box, const panel_f
     if ( tile.current ) outline( dc, box, red, px( 2 ) );
     else outline( dc, box, ink, px( 1 ) );
 
-    write( dc, tile.name, { box.left + px( 5 ), box.top + px( 3 ), box.right - px( 4 ), box.top + px( 18 ) },
+    write( dc, tile.name, { box.left + px( 6 ), box.top + px( 4 ), box.right - px( 4 ), box.top + px( 19 ) },
            tile.current ? fonts.strong : fonts.text, tile.current ? red : ink,
            DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS );
 
     int size = px( icon_size );
-    int x = box.left + px( 5 ), y = box.bottom - px( 4 ) - size;
+    // The icons sit on their own row under the name, clear of the border
+    int x = box.left + px( 6 ), y = box.bottom - px( 7 ) - size;
     for ( size_t i = 0; i < tile.program_paths.size() && int( i ) < max_icons; ++i ) {
         HICON icon = icon_of( tile.program_paths[i], size );
         if ( icon ) DrawIconEx( dc, x, y, icon, size, size, 0, nullptr, DI_NORMAL );
