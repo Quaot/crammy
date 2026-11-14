@@ -17,6 +17,7 @@ Paths in this guide are relative to the repo folder unless they start with a dri
 | Desktop shortcut | `C:\Users\Justin\Desktop\Crammy.lnk`, pointing at `crammy.exe` |
 | `settings.txt` | Next to `crammy.exe`; not committed. It holds the panel shortcut and the Youtonomous program and videos. It also says whether to start at sign-in. Every key has a default, so the file may be missing |
 | `timetable.txt` | Next to `crammy.exe`; committed. One line for each class block, copied from Quest |
+| `places.txt` | Next to `crammy.exe`; not committed. The last lecture deck reached for each `sequence` setup, such as `ECE 150: Lecture = 3.02 Linear search.pdf` |
 | Startup shortcut | `Crammy.lnk` in the user's Startup folder, running `crammy.exe --background`; made and removed by the tray menu |
 | Windhawk mod | `windhawk\crammy-button.wh.cpp`, added to Windhawk by hand; it puts the Crammy button on the taskbar |
 | Course files | `C:\Users\Justin\Downloads\<course>`, such as `Downloads\ECE 190`. File names follow `Downloads\Index.md` (`ECE190-W10-Slides.pdf`, `MATH117-L23.pdf`) |
@@ -63,6 +64,9 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/editor_window.cpp` | Edit as text: a plain editor for `profiles.txt` |
 | `src/profiles.cpp` | Reading and writing `profiles.txt`; joining paths to the root |
 | `src/sequence.cpp` | Putting numbered lecture decks in section order, finding the deck after a place, and reading and writing `places.txt` |
+| `src/next_line.cpp` | Which class the taskbar line is about (`find_next_class`) and the text of the line (`line_text`) |
+| `src/slide_watch.cpp` | Deciding whether a newer `newest` file should replace the one open (`replacement_for`) |
+| `src/next_runner.cpp` | What Next does in the background: the windows it opened this run, the watches on newest slides, the decks opened today, `next deck`, and the line kept as the background window's title |
 | `src/files.cpp` | Finding PDFs, spotting answer keys, the `newest` pattern, naming notes files |
 | `src/launch.cpp` | Turning a setup into windows to open |
 | `src/tiling.cpp` | Starting programs, finding their windows, moving and snapping them; small helpers shared with other files |
@@ -73,7 +77,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/subjects.cpp` | Matching a class to a desktop name and to a setup, plus two small helpers: `kind_name`, the word for a class kind (only used to fill `today_row`), and the check for a course folder in Downloads |
 | `src/panel_model.cpp` | What the panel shows and does, as plain data with no window: today's rows and the desktop tiles, and the plan for a class click (the types are in `panel_model.h`) |
 | `src/panel.cpp` | The panel window; `toggle_panel` in `panel.h` shows it or hides it, and `show_panel` only shows it |
-| `src/background.cpp` | Background mode: the hidden `CrammyBackground` window, the tray icon, the shortcut, the one-copy lock and the Startup shortcut |
+| `src/background.cpp` | Background mode: the hidden `CrammyBackground` window and its messages, the tray icon, the shortcut, the one-copy lock and the Startup shortcut |
 | `src/ui.cpp` | Fonts, DPI scaling, window creation, the message loop |
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
@@ -115,12 +119,14 @@ To add a setting or a kind, change `profiles.h` (the structs), `read_book` and `
 
 | Program | Started with | Its window is found by |
 |---|---|---|
-| PdfCraft | `pdfcraft.exe --new-window "a.pdf" "b.pdf"` (several files give tabs in one window) | the process ID of the program started |
+| PdfCraft | `pdfcraft.exe --new-window "a.pdf" "b.pdf"` (several files give tabs in one window); a window Next opens for lecture decks also gets `--control <file>` | the process ID of the program started |
 | Acrobat | `Acrobat.exe /n "file.pdf"` (`/n` forces a new window) | a title containing the file name and "Adobe Acrobat"; `/n` hands off to another process, so the ID cannot be used |
 | Notepad++ | `notepad++.exe "file.txt"` (opens a tab in the running copy) | a title containing the file name and "Notepad++" |
 | File Explorer | `explorer.exe "folder"` | window class `CabinetWClass` and the folder name in the title |
 
 The program paths are in `program_file` in `tiling.cpp`. Each side of the work area is split into equal rows for the windows on it. Windows 11 draws invisible borders around windows, so sizes use the visible frame from `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)`.
+
+`open_windows_recorded` does the same as `open_windows` and also returns an `opened_window` for each file: the window that shows it, the program and the side. Next keeps these to know which windows it opened.
 
 Programs often restore their own saved size a moment after appearing, so `open_windows` keeps moving each window back until all of them stay put for four checks in a row (15 seconds at most).
 
@@ -179,7 +185,7 @@ Windows 11 Notepad has no way for another program to save or close a tab, which 
 
 From the top, the panel has these parts. `lay_out_panel` in `panel.cpp` places them. `click` and `over_something` use the same rectangles as the drawing, so a click acts on what is drawn under the mouse.
 
-- The date line, with the date on the left and the time on the right.
+- The date line, with the date on the left. While the next class has lecture decks open today, a red `next deck` link is at its right end (see Next below). The clock was taken out; the taskbar already shows the time.
 - A row for each class today. A row starts with the start time and the course, and then gives the kind as Quest's three-letter code in lower case, such as `lec`. Only the marked row (the class on now, or the next one today) is drawn in red, with a red bar at its left. That row alone also shows the room, and at the right `Nm` for the minutes until it starts or `now` while it is on. A course with no folder in Downloads is grey and does nothing when clicked.
 - The message line, under the rows, when `today_section.message` is not empty. A timetable error comes first. Without one, the line shows the first settings error, and with neither it reads `No classes today` on a day with no classes. With no rows, the message is the only line in this part. A timetable error never hides the rows.
 - A chip for each virtual desktop, four to a row, with the desktop's name and the icons of up to 3 programs open on it. The chip of the desktop showing has a red outline.
@@ -192,6 +198,24 @@ What the panel shows and what a click does are worked out in `panel_model.cpp`, 
 Clicking a class goes to the desktop named after the course number (`desktop_name_for`; `150` for ECE 150). If that desktop does not exist, it is created first. The registry can take a moment to list the new desktop, so `open_class` waits until `desktop_names` has one more name, for up to 2 seconds, before it switches. If nothing is open on it, the setup `<Subject>: Lecture` or `<Subject>: Tutorial` is opened there when it exists. Other kinds of class only switch. `plan_class_click` makes this plan.
 
 The Pomodoro links start Youtonomous through `youtonomous_command`, with the long or the short video from the settings. Nothing else starts Youtonomous.
+
+### Next
+
+`docs/next-design.md` is the approved design. The code is in `next_runner.cpp`, and `background.cpp` passes it the messages and timers of the hidden window.
+
+**The line.** `refresh_line` reads the timetable, finds the class with `find_next_class` and makes the text with `line_text`. While the class is the one Next opened lecture decks for today, the deck's name (`deck_label`) takes the place of the room. The text goes through `background_title`, which puts `-` in front when Next would do nothing: no class found, or a course with no folder in Downloads. The result becomes the title of the `CrammyBackground` window. Crammy sets it once a minute, and again after every Next or next deck. The Windhawk mod reads that title.
+
+**The message.** The taskbar's next button posts the registered message `CrammyNext` (`next_message()`) to the hidden window, and `ask_running_crammy_for_next` does the same from code. The window calls `run_next`. Keep the message name as it is: the mod has it written in.
+
+**What Next does.** It does what a class click in the panel does, through `plan_class_click` and `go_to_class_desktop`: it creates the course's desktop if needed and switches to it. It passes no tiles to `plan_class_click`, so the setup is named even when the desktop already has windows. The setup follows the panel's rule: a lecture opens `<Subject>: Lecture` and a tutorial opens `<Subject>: Tutorial` if there is one. Labs, tests and seminars only switch. If the setup needs ticks, the tick list shows first. Then `plan_setup` works out the windows. When every file in that plan is shown by a window Next opened in this run that still exists (`all_already_open`), Next only switches. Otherwise `open_plan` in `launch.cpp` opens the plan and the windows are added to the list. The list is kept in memory, so after a restart Next opens the slides again. Windows already on the desktop are left alone.
+
+**Busy.** While Next or next deck is opening windows, or while any tick list of Crammy's is open, another Next or next deck is ignored, and the watches wait.
+
+**Watches.** After Next opens a setup, each `newest` line of it gets a watch on the window that shows its file. Every 2 seconds `check_watches` lists the PDFs in that line's folder with how long ago each one's size changed. It then asks `replacement_for` whether a newer finished file fits the pattern. If one does, it is opened on the same side with the same program through `open_windows_recorded`, and the old window gets `WM_CLOSE`. This happens only while the desktop that Next opened the setup on is showing. A watch ends when its window is gone or the day changes (`watch_has_ended`). The next Next also ends it, unless that Next only switches.
+
+**Lecture decks.** For a setup with a `sequence` line, `plan_setup` picks the deck after the place in `places.txt`, or the ticked decks when there is no place. After the windows open, the highest deck opened is saved as the place with `write_places`. The PdfCraft window for the decks starts with `--control <file>`, with the file in `%TEMP%\crammy\`. A second Next for the same class on the same day shows the decks already opened instead of moving the place on.
+
+**next deck.** The panel shows `next deck` while the next class is the one decks were opened for today, and `last deck` when the place is the last deck, where a click does nothing. A click switches to the class's desktop, closes the deck window and opens a new one on the same side with every deck opened today as tabs, in section order. The new deck becomes the place, and the line changes to its name. The page he was on is lost. This is the design's fallback: `pdfcraft-cli ui --control <file>` has an `open` method, but it was not tried, since that needs a running PdfCraft on the owner's screen. If it turns out to add a tab to the window, `run_next_deck` can call it instead of reopening the window.
 
 **The Windhawk mod.** `windhawk\crammy-button.wh.cpp` hides the Widgets button on the taskbar and puts a Crammy button in its place. A click posts `CrammyShowPanel`, or runs `crammy.exe --panel` when the background window does not exist. Before either, it calls `AllowSetForegroundWindow`, because Explorer had the click, and Windows only lets the program with the last input give the focus to another program. For the post, it names the process of the `CrammyBackground` window; for `--panel`, it uses `ASFW_ANY`. It does nothing else, so that as little as possible runs inside Explorer. `windhawk\README.md` says how to add it and switch it off. The owner adds it himself.
 
@@ -288,7 +312,7 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 - Commit messages and documentation use plain words and short sentences. Avoid figures of speech, including saying a file "lives" somewhere; say where it is. Avoid lists of exactly three items in prose; use two, or split the sentence.
 - Write the spec and the blind tests first (see Testing), then the code. A failing test is fixed in the code; a spec is corrected before any test that follows it.
 - Run `git pull --rebase --autostash` before pushing, and read the push output; a rejected push can look like success if the output is hidden.
-- `crammy.exe`, `tests\crammy_test.exe`, `last setup.txt` and `notes opened.txt` are not committed.
+- `crammy.exe`, `tests\crammy_test.exe`, `last setup.txt`, `notes opened.txt` and `places.txt` are not committed.
 - When a change makes this guide or the README wrong, fix them in the same commit. Remove a Known limits entry as soon as the limit is gone.
 
 ## Known limits

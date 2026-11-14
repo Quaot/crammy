@@ -4,6 +4,7 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include "next_runner.h"
 #include "panel.h"
 #include "settings.h"
 #include "tiling.h"
@@ -131,6 +132,10 @@ LRESULT CALLBACK background_proc( HWND window, UINT message, WPARAM wparam, LPAR
         else toggle_panel();
         return 0;
     }
+    if ( message == next_message() ) {
+        run_next();
+        return 0;
+    }
     if ( message == taskbar_created_message ) {
         add_tray_icon( window );
         return 0;
@@ -139,6 +144,9 @@ LRESULT CALLBACK background_proc( HWND window, UINT message, WPARAM wparam, LPAR
     case tray_message:
         if ( LOWORD( lparam ) == WM_LBUTTONUP ) toggle_panel();
         else if ( LOWORD( lparam ) == WM_RBUTTONUP ) show_tray_menu( window );
+        return 0;
+    case WM_TIMER:
+        on_next_timer( wparam );
         return 0;
     case WM_HOTKEY:
         if ( wparam == hotkey_id ) toggle_panel();
@@ -173,6 +181,35 @@ bool this_program_is_in_background() {
 bool ask_running_crammy_to_toggle_panel() {
     HWND window = find_background_window();
     return window && PostMessageW( window, show_panel_message(), 0, 0 );
+}
+
+UINT next_message() {
+    static UINT message = RegisterWindowMessageW( L"CrammyNext" );
+    return message;
+}
+
+bool ask_running_crammy_for_next() {
+    HWND window = find_background_window();
+    return window && PostMessageW( window, next_message(), 0, 0 );
+}
+
+wstring background_title( const wstring &line, bool next_can_act ) {
+    return next_can_act ? line : L"-" + line;
+}
+
+bool all_already_open( const vector<wstring> &files, const vector<recorded_window> &windows ) {
+    if ( files.empty() ) return false;
+    for ( const wstring &file : files ) {
+        bool shown = false;
+        for ( const recorded_window &window : windows )
+            shown = shown || ( window.alive && lower( window.path ) == lower( file ) );
+        if ( !shown ) return false;
+    }
+    return true;
+}
+
+bool watch_has_ended( calendar_date started, calendar_date today ) {
+    return started < today;
 }
 
 bool ask_running_crammy_to_show_panel() {
@@ -223,6 +260,7 @@ int run_background( bool show_panel_now ) {
     // Another program may already own the shortcut; the tray icon still works without it.
     RegisterHotKey( window, hotkey_id, modifiers | MOD_NOREPEAT, key );
 
+    start_next_runner( window );
     if ( show_panel_now ) show_panel();
     run_message_loop();
     return 0;
