@@ -102,6 +102,8 @@ A builder read this design and asked about the cases below. These are my calls; 
 - **The next-deck fallback.** If PdfCraft cannot add a tab, the window is reopened with the decks opened for this class today, in order. The page he was on is lost in that case.
 - **A second open on the same day.** Every way of opening a `sequence` setup (the Setups window, a class click, `--setup` and Next) reads and writes the decks opened today in `decks today.txt`, next to `places.txt`. A second open on the same day shows the same decks again, and only next deck moves on.
 
+- **Two rows on the taskbar.** Once the owner saw the line on his taskbar, one row ran under the Start and Search buttons, because the weather spot is only about 150 pixels wide. The line is now two short rows, like the weather's temperature over its condition: the class on top, such as `MATH 117 tut`, and where and when below, such as `Mon 08:30 · DWE 1515`, or the deck during a 150 lecture. Each row is cut to 24 characters. Crammy keeps both rows in its window title, separated by a newline, and the mod stacks them in a smaller font with **▸** beside them, inside the space before the Start button.
+
 ## Left to the builder
 
 - How the folder watch is done (`ReadDirectoryChangesW` or polling).

@@ -47,37 +47,46 @@ With the real timetable, on Monday 2026-11-16:
 
 ## `line_text`
 
-Parts are joined with ` · ` (space, middle dot U+00B7, space). The kind is the timetable's code in lower case cut to three letters: `LEC` gives `lec`, `TUT` gives `tut`, `PRJ` gives `prj`.
+The line has two rows, like the weather it replaces: a top row naming the class and a bottom row saying where and when. `line_text` returns them joined by one newline, `
+` (U+000A), with no newline at the end. Parts within a row are joined with ` · ` (space, middle dot U+00B7, space). The kind is the timetable's code in lower case cut to three letters: `LEC` gives `lec`, `TUT` gives `tut`, `PRJ` gives `prj`.
 
-For a class today:
+The top row is always `<course> <kind>`.
 
-- When it is on: `<course> <kind> · <room> · now`.
-- When it starts within 60 minutes: `<course> <kind> · <room> · in <N>m`, where N is the start minute minus the minute now.
-- Otherwise: `<course> <kind> · <room> · <HH:MM>`, its start time with two digits for the hour.
+The bottom row, for a class today:
 
-For a class on another day: `<Ddd> <HH:MM> <course> <kind> · <room>`, where Ddd is `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat` or `Sun`.
+- When it is on: `<room> · now`.
+- When it starts within 60 minutes: `<room> · in <N>m`, where N is the start minute minus the minute now.
+- Otherwise: `<room> · <HH:MM>`, its start time with two digits for the hour.
+- When `deck` is not empty, the deck is the whole bottom row: `<deck>`.
 
-When `deck` is not empty and the class is today, the deck replaces the room and the time: `<course> <kind> · <deck>`.
+The bottom row, for a class on another day: `<Ddd> <HH:MM> · <room>`, where Ddd is `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat` or `Sun`. The deck is not shown for another day.
 
-When `found` is false: `No classes`.
+When `found` is false the line is the single row `No classes`, with no newline.
 
-Lines longer than 48 characters are cut to their first 47 characters followed by `…` (U+2026), for 48 in all. Lines of 48 or fewer are left as they are.
+Each row longer than 24 characters is cut to its first 23 characters followed by `…` (U+2026), for 24 in all. Rows of 24 or fewer are left as they are.
 
 With the real timetable on Monday 2026-11-16:
 
-- 805 gives `ECE 150 lec · PSE 5353 · in 5m`.
-- 825 gives `ECE 150 lec · PSE 5353 · now`.
-- 400 gives `MATH 117 tut · DWE 1515 · 08:30`.
-- 1320 gives `Tue 10:30 MATH 115 tut · DWE 3516`.
-- 825 with the deck `3.02 Linear search` gives `ECE 150 lec · 3.02 Linear search`.
-- 1320 with the deck `3.02 Linear search` still gives `Tue 10:30 MATH 115 tut · DWE 3516`, because that class is not today.
+- 805 gives `ECE 150 lec
+PSE 5353 · in 5m`.
+- 825 gives `ECE 150 lec
+PSE 5353 · now`.
+- 400 gives `MATH 117 tut
+DWE 1515 · 08:30`.
+- 1320 gives `MATH 115 tut
+Tue 10:30 · DWE 3516`.
+- 825 with the deck `3.02 Linear search` gives `ECE 150 lec
+3.02 Linear search`.
+- 1320 with the deck `3.02 Linear search` still gives `MATH 115 tut
+Tue 10:30 · DWE 3516`, because that class is not today.
 
-A next_class made in the test, today, on now, course `ECE 150`, kind `LEC`, with the deck `1.08 Conditional statements and comparison operators`, gives a line of exactly 48 characters ending in `…`, whose first 47 characters are the start of `ECE 150 lec · 1.08 Conditional statements and comparison operators`.
+A next_class made in the test, today, on now, course `ECE 150`, kind `LEC`, with the deck `1.08 Conditional statements and comparison operators`, gives `ECE 150 lec
+` followed by a bottom row of exactly 24 characters: the first 23 characters of the deck, then `…`.
 
 ## Also settled
 
 - A class exactly 60 minutes away counts as within 60 minutes: `in 60m`. At 61 minutes the start time shows.
-- Characters are counted as `wstring` characters, so the middle dot and the ellipsis count as one each.
+- Characters are counted as `wstring` characters, so the middle dot and the ellipsis count as one each, and each row is counted on its own.
 - When `today` is true, `date` is the day passed as today.
 - With `found` false the line is `No classes`, whatever the deck.
 - On Monday 2026-11-16 at 625 (10:25), MATH 117 TUT has ended and the class is GENE 119 SEM at 630, with `known` false.
