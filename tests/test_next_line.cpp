@@ -198,7 +198,7 @@ void check_line_length() {
 
     // A top row over 24 characters is cut too
     next_class long_name = made( true, monday, L"ABCDEFGHIJKLMNOPQRSTUV", L"LEC", 810, 860, L"PSE 5353" );
-    check( line_text( long_name, 825, L"" ) == L"ABCDEFGHIJKLMNOPQRSTUV l" + ellipsis + nl + L"PSE 5353" + dot + L"now",
+    check( line_text( long_name, 825, L"" ) == L"ABCDEFGHIJKLMNOPQRSTUV " + ellipsis + nl + L"PSE 5353" + dot + L"now",
            "a top row over 24 characters is cut on its own" );
 }
 
