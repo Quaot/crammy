@@ -49,7 +49,7 @@ Pressing `▸ next` after the line goes to that class's desktop and opens its se
 
 After Next opens a setup, Crammy watches the folder of every `newest` line until midnight or the next press of Next. A newer download that fits the pattern opens over the old slides once its size has stopped changing, and the window with the old slides closes. This happens only while that desktop is showing, and Crammy closes only windows it opened itself.
 
-The ECE 150 lecture setup uses a `sequence` line. Next opens the deck after the place saved in `places.txt`, and shows the tick list when there is no place yet. Opening the setup any other way saves the place as well, as the highest deck opened. While those decks are open, the line shows the deck's name where the room was.
+The ECE 150 lecture setup uses a `sequence` line. Next opens the deck after the place saved in `places.txt`, and shows the tick list when there is no place yet. Opening the setup any other way saves the place as well, as the highest deck opened. Every way of opening also writes the decks it opened to `decks today.txt`, next to `places.txt`. A second open on the same day shows the same decks again, and only next deck moves on. While those decks are open, the line shows the deck's name where the room was.
 
 The next deck is reached from the panel only. Its `next deck` link reopens the PdfCraft window with today's decks and the following one as tabs, and moves the place on. At the last deck the link reads `last deck` and does nothing.
 

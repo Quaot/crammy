@@ -40,19 +40,6 @@ struct slide_watch {
 };
 vector<slide_watch> watches;
 
-// The lecture decks of a sequence setup that Next opened today
-struct deck_run {
-    wstring setup_title;            // "" until Next opens decks
-    wstring course, kind;
-    calendar_date date{};
-    layout_item item;               // the sequence line
-    vector<wstring> opened;         // deck paths, in section order
-    vector<opened_window> windows;  // one entry for each window showing them
-    wstring side;
-    wstring desktop;
-};
-deck_run decks;
-
 struct moment {
     calendar_date date;
     int minute;
@@ -71,10 +58,53 @@ next_class current_next( const moment &at ) {
     return find_next_class( blocks, at.date, at.minute, known_courses( blocks ) );
 }
 
-// True when the next class is the one today's decks were opened for
-bool decks_are_on( const next_class &next, calendar_date today ) {
-    return !decks.setup_title.empty() && !decks.opened.empty() && decks.date == today && next.found && next.today &&
-           same_course( next.meeting.course, decks.course ) && lower( next.meeting.kind ) == lower( decks.kind );
+// The lecture decks opened today for the next class's sequence setup, read from decks today.txt,
+// which every way of opening a setup writes
+struct today_decks {
+    bool on = false;            // decks were opened today for the next class
+    wstring setup_title;
+    layout_item item;           // the sequence line
+    wstring desktop;            // the class's desktop
+    vector<pdf_file> found;     // the decks in the folder, in section order
+    vector<wstring> opened;     // paths of today's decks still in the folder, in the order opened
+    wstring highest;            // the name of the highest of them, or the place when none is left
+};
+
+today_decks decks_are_on( const next_class &next ) {
+    today_decks decks;
+    if ( !next.found || !next.today ) return decks;
+
+    profile_file profiles = load_profiles();
+    vector<wstring> titles;
+    for ( const setup &each : profiles.setups ) titles.push_back( each.title );
+    const setup *chosen = find_setup( profiles, setup_for_class( next.meeting.course, next.meeting.kind, titles ) );
+    if ( !chosen ) return decks;
+    bool has_sequence = false;
+    for ( const layout_item &item : chosen->items ) {
+        if ( item.kind != item_kind::sequence ) continue;
+        decks.item = item;
+        has_sequence = true;
+    }
+    if ( !has_sequence ) return decks;
+
+    decks_on_day record = saved_decks_today( chosen->title );
+    if ( record.date != today_text() || record.files.empty() ) return decks;
+
+    decks.on = true;
+    decks.setup_title = chosen->title;
+    decks.desktop = desktop_name_for( next.meeting.course );
+    decks.found = pick_files( decks.item );
+    decks.highest = saved_place( chosen->title );
+    bool any_left = false;
+    for ( const wstring &file : record.files ) {
+        for ( const pdf_file &pdf : decks.found ) {
+            if ( lower( pdf.name ) != lower( file ) ) continue;
+            decks.opened.push_back( pdf.path );
+            if ( !any_left || deck_before( decks.highest, pdf.name ) ) decks.highest = pdf.name;
+            any_left = true;
+        }
+    }
+    return decks;
 }
 
 // Presses of Next that arrived while busy were queued; they are dropped, not run afterwards
@@ -214,21 +244,6 @@ void check_watches() {
     }
 }
 
-// Remembers the decks a sequence line opened, and which windows show them
-void remember_decks( const setup &chosen, const layout_item &item, const next_class &next,
-                     const vector<opened_window> &opened, const wstring &desktop, calendar_date today ) {
-    deck_run run{ chosen.title, next.meeting.course, next.meeting.kind, today, item, {}, {}, L"", desktop };
-    run.opened = decks_shown( item, opened );
-    for ( const opened_window &window : opened ) {
-        if ( window.app != program::pdfcraft || !is_one_of( window.path, run.opened ) ) continue;
-        bool listed = false;
-        for ( const opened_window &each : run.windows ) listed = listed || each.window == window.window;
-        if ( !listed ) run.windows.push_back( window );
-        run.side = window.side;
-    }
-    if ( !run.opened.empty() ) decks = run;
-}
-
 void add_problem( wstring &problem, const wstring &more ) {
     if ( !more.empty() ) problem += ( problem.empty() ? L"" : L" " ) + more;
 }
@@ -279,24 +294,12 @@ wstring open_next() {
     if ( sequence )
         for ( const pdf_file &pdf : pick_files( *sequence ) ) deck_paths.push_back( pdf.path );
 
-    // When decks were opened for this class today, they are the decks to show, so a second press
-    // does not move the place on.
-    bool same_decks = sequence && decks_are_on( next, at.date ) && decks.setup_title == chosen.title;
-    bool decks_placed = false;
-    for ( size_t i = 0; i < plan.size(); ) {
-        planned_window &window = plan[i];
+    // plan_setup already plans the decks opened today, from decks today.txt, so a second press
+    // does not move the place on. A window of decks gets a control file.
+    for ( planned_window &window : plan ) {
         bool all_decks = window.app == program::pdfcraft && !window.paths.empty();
         for ( const wstring &path : window.paths ) all_decks = all_decks && is_one_of( path, deck_paths );
-        if ( all_decks && same_decks ) {
-            if ( decks_placed ) {
-                plan.erase( plan.begin() + i );
-                continue;
-            }
-            window.paths = decks.opened;
-            decks_placed = true;
-        }
         if ( all_decks ) window.control_file = new_control_file();
-        ++i;
     }
 
     vector<wstring> files;
@@ -313,7 +316,6 @@ wstring open_next() {
     records.insert( records.end(), opened.begin(), opened.end() );
     watches.clear();
     start_watches( chosen, opened, desktop, at.date );
-    if ( sequence ) remember_decks( chosen, *sequence, next, opened, desktop, at.date );
     add_problem( problem, save_places( chosen, opened ) );     // as open_setup does
 
     for ( const wstring &each : problems ) add_problem( problem, each );
@@ -350,7 +352,8 @@ void refresh_line() {
     if ( !background ) return;
     moment at = now();
     next_class next = current_next( at );
-    wstring deck = decks_are_on( next, at.date ) ? deck_label( file_name( decks.opened.back() ) ) : L"";
+    today_decks decks = decks_are_on( next );
+    wstring deck = decks.on ? deck_label( decks.highest ) : L"";
     wstring title = background_title( line_text( next, at.minute, deck ), next.found && next.known );
     SetWindowTextW( background, title.c_str() );
 }
@@ -365,23 +368,20 @@ void run_next() {
 }
 
 wstring next_deck_label() {
-    moment at = now();
-    if ( !decks_are_on( current_next( at ), at.date ) ) return L"";
-    wstring place = file_name( decks.opened.back() );
-    return deck_after( names_of( pick_files( decks.item ) ), place ) == place ? L"last deck" : L"next deck";
+    today_decks decks = decks_are_on( current_next( now() ) );
+    if ( !decks.on ) return L"";
+    return deck_after( names_of( decks.found ), decks.highest ) == decks.highest ? L"last deck" : L"next deck";
 }
 
 void run_next_deck() {
     if ( next_is_busy() ) return;
-    moment at = now();
-    if ( !decks_are_on( current_next( at ), at.date ) ) return;
-    vector<pdf_file> found = pick_files( decks.item );
-    wstring place = file_name( decks.opened.back() );
-    wstring next_name = deck_after( names_of( found ), place );
+    today_decks decks = decks_are_on( current_next( now() ) );
+    if ( !decks.on ) return;
+    wstring next_name = deck_after( names_of( decks.found ), decks.highest );
     wstring next_path;
-    for ( const pdf_file &pdf : found )
+    for ( const pdf_file &pdf : decks.found )
         if ( pdf.name == next_name ) next_path = pdf.path;
-    if ( next_name == place || next_path.empty() ) return;     // the last deck: nothing to add
+    if ( next_name == decks.highest || next_path.empty() ) return;     // the last deck: nothing to add
 
     busy = true;
     wstring problem = switch_to_desktop( decks.desktop );
@@ -391,16 +391,19 @@ void run_next_deck() {
         vector<wstring> paths = decks.opened;
         paths.push_back( next_path );
         vector<wstring> problems;
-        planned_window window{ decks.side, program::pdfcraft, paths, new_control_file() };
+        planned_window window{ decks.item.side, program::pdfcraft, paths, new_control_file() };
         vector<opened_window> opened = open_windows_recorded( { window }, problems );
         if ( opened.empty() ) {
             problem = problems.empty() ? L"No window appeared for " + next_name : problems[0];
         } else {
-            for ( const opened_window &old : decks.windows ) close_if_ours( old, opened[0].window );
+            // The old deck windows are the ones this run opened that show one of today's decks
+            for ( const opened_window &old : records ) {
+                if ( old.app == program::pdfcraft && is_one_of( old.path, decks.opened ) )
+                    close_if_ours( old, opened[0].window );
+            }
             records.insert( records.end(), opened.begin(), opened.end() );
-            decks.windows = { opened[0] };
-            decks.opened = paths;
-            if ( !save_place( decks.setup_title, next_name ) ) problem = place_problem;
+            if ( !save_decks_today( decks.setup_title, { next_name } ) ) problem = decks_today_problem;
+            else if ( !save_place( decks.setup_title, next_name ) ) problem = place_problem;
         }
     }
     stop_being_busy();

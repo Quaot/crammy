@@ -7,7 +7,7 @@
 #include "text.h"
 
 // Next and what it keeps for this run: the windows it opened and the watches on newest slides.
-// It also keeps the lecture decks opened today; only their place is saved, in places.txt.
+// The lecture decks opened today are read from decks today.txt, and their place from places.txt.
 
 // Remembers the hidden background window, sets its title and starts the timers.
 void start_next_runner( HWND background_window );
@@ -28,9 +28,9 @@ void refresh_line();
 // Goes to the next class's desktop and opens its setup. Ignored while a Next or next deck is busy.
 void run_next();
 
-// "next deck" or "last deck" while the next class has decks open today, otherwise "".
+// "next deck" or "last deck" while the next class has decks opened today, otherwise "".
 wstring next_deck_label();
 
-// Reopens the class's PdfCraft window with today's decks and the deck after the place as tabs,
-// closes the old window and saves the place.
+// Reopens the class's PdfCraft window with today's decks and the deck after the highest of them
+// as tabs, closes the old window, adds the deck to decks today.txt and saves the place.
 void run_next_deck();
