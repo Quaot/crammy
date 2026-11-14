@@ -90,7 +90,7 @@ A class is on a given day when the day matches and the date is inside the range.
 
 ### Desktops: creating, naming, switching and reading
 
-- Reading names and switching stays as it is now: names from the registry, switching with Ctrl+Win+Left or Right.
+- Names are read from the registry. Switching jumps straight to the desktop with `SwitchDesktop` on the interface described below, and falls back to Ctrl+Win+Left or Right when that interface cannot be reached.
 - Creating and naming a desktop has no documented API. Summon's `src/virtual_desktops.cpp` (Quaot/summon) shows how to reach Explorer's `IVirtualDesktopManagerInternal` on build 26200, but it only moves windows; it has no create or rename calls. Crammy adds them in its own `desktops.cpp`: `CreateDesktop` and `SetDesktopName` on the build 26200 interface, with the method order checked against a published list for that build before use (my call). If the interface cannot be reached or a call fails, Crammy falls back to pressing Ctrl+Win+D, which creates a desktop and switches to it, and leaves it unnamed. In that case the panel says in one line that the desktop needs naming in Task View. These calls cannot be checked in a hidden test because they change the owner's real desktops, so the owner tries them once, after he agrees.
 - Which desktop a window is on comes from the documented `IVirtualDesktopManager::GetWindowDesktopId`, which works for any program's windows. Tiles list visible top-level windows with a title, grouped by desktop, with each window's program icon.
 

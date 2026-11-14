@@ -74,6 +74,9 @@ vector<wstring> desktop_names() {
     return names;
 }
 
+// Defined further down, next to Explorer's desktop interface
+static bool switch_directly( const wstring &id );
+
 wstring switch_to_desktop( const wstring &name ) {
     vector<wstring> ids = desktop_ids();
     vector<wstring> names = desktop_names();
@@ -86,9 +89,12 @@ wstring switch_to_desktop( const wstring &name ) {
     int current = index_of( ids, current_id() );
     if ( current < 0 ) return L"Could not tell which desktop is showing, so the windows opened on this one.";
 
-    unsigned short arrow = target > current ? VK_RIGHT : VK_LEFT;
-    for ( int step = 0; step < std::abs( target - current ); ++step ) {
-        press_keys( { VK_CONTROL, VK_LWIN, arrow } );
+    // Jump straight to the desktop. If Explorer's interface cannot be reached, step there one desktop at a time
+    if ( target != current && !switch_directly( ids[target] ) ) {
+        unsigned short arrow = target > current ? VK_RIGHT : VK_LEFT;
+        for ( int step = 0; step < std::abs( target - current ); ++step ) {
+            press_keys( { VK_CONTROL, VK_LWIN, arrow } );
+        }
     }
 
     // The switch animates, so wait until Windows says the target desktop is showing
@@ -209,6 +215,26 @@ int create_named_desktop( const wstring &name ) {
 }
 
 }  // namespace
+
+// Shows the desktop with this registry id in one step, through Explorer's own switch call
+static bool switch_directly( const wstring &id ) {
+    GUID guid;
+    if ( FAILED( CLSIDFromString( id.c_str(), &guid ) ) ) return false;
+    com_session com;
+    IServiceProvider *shell = nullptr;
+    if ( FAILED( CoCreateInstance( clsid_immersive_shell, nullptr, CLSCTX_LOCAL_SERVER, IID_IServiceProvider,
+                                   reinterpret_cast<void **>( &shell ) ) ) )
+        return false;
+    desktop_manager_internal *manager = nullptr;
+    IUnknown *desktop = nullptr;
+    bool switched = SUCCEEDED( shell->QueryService( sid_desktop_manager_internal, iid_desktop_manager_internal, reinterpret_cast<void **>( &manager ) ) ) &&
+                    SUCCEEDED( manager->find_desktop( &guid, &desktop ) ) && desktop &&
+                    SUCCEEDED( manager->switch_desktop( desktop ) );
+    if ( desktop ) desktop->Release();
+    if ( manager ) manager->Release();
+    shell->Release();
+    return switched;
+}
 
 // A desktop that was made but not named is left as it is, so pressing Ctrl+Win+D would make a second one
 bool create_desktop( const wstring &name, wstring &problem ) {
