@@ -324,6 +324,7 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 - Program paths are fixed in `program_file`. If PdfCraft, Acrobat or Notepad++ moves, Crammy will report that no window appeared.
 - If Notepad++ is open on another desktop, a new notes tab opens in that window, and moving it brings it to the current desktop.
 - `newest` uses the modified date, so re-saving an old PDF makes it the newest.
+- When a separate copy of `crammy.exe` opens a setup with decks, the background Crammy does not learn of its windows, so a later next deck leaves the old deck window open under the new one.
 - Only one monitor is handled: everything uses the primary monitor's work area, and the panel assumes one as well.
 - `create_desktop` and the Windhawk mod are not covered by tests. They change the real desktops or the real taskbar, which a hidden test cannot do, so they were tried by hand. Try them by hand again after a Windows update.
 - `create_desktop` depends on the slot order of an undocumented interface for build 26200. On another build it can call the wrong method. `switch_to_desktop` uses the same interface, through `SwitchDesktop` and `FindDesktop`. The Ctrl+Win+D fallback only runs when the interface cannot be reached or `CreateDesktop` fails.

@@ -9,6 +9,7 @@
 #include "desktops.h"
 #include "dialogs.h"
 #include "launch.h"
+#include "next_runner.h"
 
 namespace {
 
@@ -209,7 +210,10 @@ void open_current() {
     }
 
     ShowWindow( ui.window, SW_HIDE );
-    vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate );
+    vector<opened_window> opened;
+    vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate, &opened );
+    // Only the background Crammy keeps the windows for next deck; a separate copy cannot tell it
+    if ( this_program_is_in_background() ) remember_windows( opened );
     write_text_file( last_setup_path(), chosen.title );
     if ( !problems.empty() ) {
         wstring text;
