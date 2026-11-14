@@ -8,7 +8,7 @@ The panel as built shows a clock and a list of names, which the owner can read o
 
 ## Goals
 
-- A line of text on the taskbar, where the weather is now, always visible: the next class, its room and when it starts, such as `ECE 150 lec · PSE 5353 · in 5m`.
+- A line of text on the taskbar, where the weather is now, always visible: the next class, its room and when it starts, such as `ECE 150 lec · PSE 5353 · in 5m`. The one-row form was later replaced by two rows; see **Two rows on the taskbar** under Settled after review.
 - A **▸ next** button beside the line. One press goes to the class's desktop (in one jump, as switching does now) and opens its slides.
 - When newer slides are downloaded after Next has opened old ones, the new file takes the old one's place without a press.
 - For ECE 150, whose slides are numbered sections, Next opens the section after the last one opened, and a **next deck** link adds the following section as a tab in the same PdfCraft window. Crammy remembers the place between lectures.
@@ -36,13 +36,13 @@ The panel as built shows a clock and a list of names, which the owner can read o
 
 ### Which class is "next"
 
-The same class the panel marks now: the one on now, or else the next one today. After the last class of the day, the line shows the first class of the next day with classes, with its weekday and start time, such as `Mon 08:30 MATH 117 tut · DWE 1515` (my call; an empty taskbar spot says nothing useful). With no classes in the timetable at all, the line reads `No classes`.
+The same class the panel marks now: the one on now, or else the next one today. After the last class of the day, the line shows the first class of the next day with classes, with its weekday and start time, such as `Mon 08:30 MATH 117 tut · DWE 1515` (my call; an empty taskbar spot says nothing useful). With no classes in the timetable at all, the line reads `No classes`. The one-row form was later replaced by two rows; see **Two rows on the taskbar** under Settled after review.
 
 Classes for courses without a folder (GENE 119, MTHEL 99) still show on the line. They have no desktop or slides, so for them the **▸ next** button is greyed and does nothing (my call).
 
 ### The line
 
-- Text: course, the kind as three letters (`lec`, `tut`, `lab`, `tst`, `sem`), the room, and `now` or `in Nm` when it starts within 60 minutes, or its start time (`13:30`) otherwise. During ECE 150 lectures, once a deck is open, the deck name follows instead of the room: `ECE 150 lec · 3.02 Linear search`.
+- Text: course, the kind as three letters (`lec`, `tut`, `lab`, `tst`, `sem`), the room, and `now` or `in Nm` when it starts within 60 minutes, or its start time (`13:30`) otherwise. During ECE 150 lectures, once a deck is open, the deck name follows instead of the room: `ECE 150 lec · 3.02 Linear search`. The one-row form was later replaced by two rows; see **Two rows on the taskbar** under Settled after review.
 - Crammy recomputes the line every 10 seconds and after every Next or next deck, and keeps it as the title of its hidden `CrammyBackground` window.
 - The mod reads that title every two seconds (my call: a timer that reads a window title is the smallest thing that can run in Explorer) and shows it in the taskbar's own font and text colour. No red, cream or engraving on the taskbar itself; the taskbar redesign decides its look.
 
@@ -97,7 +97,7 @@ A builder read this design and asked about the cases below. These are my calls; 
 - **The order of the 150 decks.** The section number is the start of the name, split at the dots and compared part by part as whole numbers, so `3.9` comes between `3.08` and `3.10`. A shorter number comes before the longer ones that start with it, so `2` comes before `2.01` and `2.05` before `2.05.1`. A letter after a number comes after the number alone, so `1.18` is followed by `1.18a` and then `1.18b`, and a letter part such as `1.A` comes after every numbered part of that chapter. `0.Welcome` is section 0, so it comes first. Names that do not start with a number (`A polynomial class.pdf`, `Date class.pdf`, `Using replit.pdf`, `assignment1.pdf`) are left out.
 - **Places.** When several decks are ticked with no saved place, the place is the highest of them. If the place names a file that is gone, Crammy uses the highest deck in the order that comes before that name. After the last deck, Next opens the last deck again.
 - **Two presses.** A press of Next or next deck while the previous one is still opening windows is ignored.
-- **A long line.** The line is cut to 48 characters, with `…` at the end when it is cut.
+- **A long line.** The line is cut to 48 characters, with `…` at the end when it is cut. Replaced by **Two rows on the taskbar**: a row is now cut to 24 characters.
 - **Next deck in the panel only.** The next deck link is in the panel, and the taskbar line shows the name of the deck reached. A next deck button on the taskbar would be a later change.
 - **The next-deck fallback.** If PdfCraft cannot add a tab, the window is reopened with the decks opened for this class today, in order. The page he was on is lost in that case.
 - **A second open on the same day.** Every way of opening a `sequence` setup (the Setups window, a class click, `--setup` and Next) reads and writes the decks opened today in `decks today.txt`, next to `places.txt`. A second open on the same day shows the same decks again, and only next deck moves on.

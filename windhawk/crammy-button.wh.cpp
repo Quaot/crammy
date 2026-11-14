@@ -26,9 +26,9 @@ when Next has nothing to open for the class.
 When Crammy is not running, the top row reads `Crammy is not running` with the
 next button greyed, and a click on it starts `crammy.exe --panel`.
 
-The rows are kept within the width set as `line_width`, 150 by default, so
-they stay in the space the Widgets button had, before the Start button. A row
-that does not fit ends in an ellipsis.
+The whole line, `▸` included, is kept within the width set as `line_width`,
+150 by default, so it stays in the space the Widgets button had, before the
+Start button. A row that does not fit ends in an ellipsis.
 
 Switch the mod off to bring the Widgets button back.
 */
@@ -41,7 +41,7 @@ Switch the mod off to bring the Widgets button back.
   $description: The program to start when Crammy is not running.
 - line_width: 150
   $name: Width of the line
-  $description: The widest the two rows may be, in pixels at 100% scaling. Lower it if the rows reach the Start button.
+  $description: The widest the line may be, the next button included, in pixels at 100% scaling. Lower it if the line reaches the Start button.
 */
 // ==/WindhawkModSettings==
 
@@ -70,7 +70,7 @@ const wchar_t not_running_text[] = L"Crammy is not running";
 const int default_line_width = 150;
 
 struct placed_line {
-    winrt::weak_ref<Controls::StackPanel> panel;
+    winrt::weak_ref<Controls::Grid> panel;
     Controls::Primitives::ButtonBase::Click_revoker text_click;
     Controls::Primitives::ButtonBase::Click_revoker next_click;
     DispatcherTimer timer{ nullptr };
@@ -222,7 +222,6 @@ void add_line( Controls::Grid root_grid ) {
     bottom.Opacity( 0.8 );
     Controls::StackPanel rows;
     rows.Orientation( Controls::Orientation::Vertical );
-    rows.MaxWidth( g_line_width );
     rows.VerticalAlignment( VerticalAlignment::Center );
     rows.Children().Append( top );
     rows.Children().Append( bottom );
@@ -234,12 +233,22 @@ void add_line( Controls::Grid root_grid ) {
     Controls::Button next_button = make_button( next_text, 4 );
     Automation::AutomationProperties::SetName( next_button, L"Next class" );
 
-    Controls::StackPanel panel;
+    // The whole line, padding and next button included, stays within
+    // line_width: the rows take what the next button leaves and are cut short.
+    Controls::ColumnDefinition rows_column;
+    rows_column.Width( GridLengthHelper::FromValueAndType( 1, GridUnitType::Star ) );
+    Controls::ColumnDefinition next_column;
+    next_column.Width( GridLengthHelper::Auto() );
+    Controls::Grid panel;
     panel.Name( line_name );
-    panel.Orientation( Controls::Orientation::Horizontal );
-    panel.Margin( Thickness{ 4, 0, 0, 0 } );
+    panel.ColumnDefinitions().Append( rows_column );
+    panel.ColumnDefinitions().Append( next_column );
+    panel.Padding( Thickness{ 4, 0, 0, 0 } );
+    panel.MaxWidth( g_line_width );
     panel.HorizontalAlignment( HorizontalAlignment::Left );
     panel.VerticalAlignment( VerticalAlignment::Center );
+    Controls::Grid::SetColumn( text_button, 0 );
+    Controls::Grid::SetColumn( next_button, 1 );
     panel.Children().Append( text_button );
     panel.Children().Append( next_button );
 
