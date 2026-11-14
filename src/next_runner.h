@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "text.h"
+#include "tiling.h"
 
 // Next and what it keeps for this run: the windows it opened and the watches on newest slides.
 // The lecture decks opened today are read from decks today.txt, and their place from places.txt.
@@ -21,6 +22,10 @@ void run_as_busy( const std::function<void()> &work );
 
 // Called for every WM_TIMER of the background window; ignores timers that are not Next's.
 void on_next_timer( UINT_PTR timer_id );
+
+// Adds windows that this process opened another way, such as from the panel or the Setups window,
+// to the windows Next knows, so next deck can close an old deck window.
+void remember_windows( const vector<opened_window> &opened );
 
 // Recomputes the taskbar line and sets it as the background window's title.
 void refresh_line();

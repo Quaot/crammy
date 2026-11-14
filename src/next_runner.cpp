@@ -348,6 +348,10 @@ bool next_is_busy() {
     return busy || FindWindowW( L"CrammyPick", nullptr ) != nullptr;
 }
 
+void remember_windows( const vector<opened_window> &opened ) {
+    records.insert( records.end(), opened.begin(), opened.end() );
+}
+
 void refresh_line() {
     if ( !background ) return;
     moment at = now();

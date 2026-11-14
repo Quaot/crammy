@@ -386,7 +386,9 @@ void open_class( const today_row &row ) {
             }
         }
         if ( !asked || picks.accepted ) {
-            vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate );
+            vector<opened_window> opened;
+            vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate, &opened );
+            remember_windows( opened );     // the panel is in the background Crammy, which keeps records
             for ( const wstring &each : problems ) problem += ( problem.empty() ? L"" : L" " ) + each;
         }
     } );

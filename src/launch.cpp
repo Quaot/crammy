@@ -218,12 +218,14 @@ wstring save_places( const setup &chosen, const vector<opened_window> &opened ) 
     return L"";
 }
 
-vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate ) {
+vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
+                            vector<opened_window> *opened ) {
     vector<wstring> problems;
     vector<planned_window> plan = plan_setup( chosen, picks, separate, problems );
     if ( plan.empty() ) return problems;
-    vector<opened_window> opened = open_plan( chosen, plan, problems );
-    wstring problem = save_places( chosen, opened );
+    vector<opened_window> windows = open_plan( chosen, plan, problems );
+    if ( opened ) *opened = windows;
+    wstring problem = save_places( chosen, windows );
     if ( !problem.empty() ) problems.push_back( problem );
     return problems;
 }

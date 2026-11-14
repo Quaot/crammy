@@ -49,5 +49,7 @@ wstring save_places( const setup &chosen, const vector<opened_window> &opened );
 // picks[i] holds the PDFs ticked for setup item i (pick items, and sequence items when not empty).
 // separate puts each picked PDF in its own PdfCraft window.
 // Saves today's decks and the place of each sequence item that opened.
-// Returns problems to show the user; empty when everything opened.
-vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate );
+// Returns problems to show the user; empty when everything opened. When opened is given, it gets
+// which window shows which file.
+vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
+                            vector<opened_window> *opened = nullptr );
