@@ -33,6 +33,7 @@ vector<wstring> open_windows( const vector<planned_window> &plan );
 
 struct opened_window {
     HWND window;
+    DWORD process_id;   // the window's process, so a reused handle is never taken for it
     wstring path;       // one of the files the window shows
     program app;
     wstring side;
@@ -41,3 +42,10 @@ struct opened_window {
 // open_windows, and also says which window shows which file: one entry for each path of each
 // window that appeared. problems gets a message for each window that never appeared.
 vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems );
+
+// Opens one window over the frame old_window has now. It only moves the window there: it
+// presses no keys and leaves the focus where it is.
+vector<opened_window> open_window_in_place_of( const planned_window &window, HWND old_window, vector<wstring> &problems );
+
+// True when the window still exists and still belongs to that process.
+bool still_ours( HWND window, DWORD process_id );

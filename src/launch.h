@@ -19,7 +19,20 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
 // Returns which window shows which file; problems gets what went wrong.
 vector<opened_window> open_plan( const setup &chosen, const vector<planned_window> &plan, vector<wstring> &problems );
 
-// picks[i] holds the PDFs ticked for setup item i (only pick items use it).
+// The decks of a sequence item that the opened windows show, as paths in section order.
+vector<wstring> decks_shown( const layout_item &item, const vector<opened_window> &opened );
+
+// Saves deck_name as the setup's place in places.txt. False when it could not be saved.
+bool save_place( const wstring &title, const wstring &deck_name );
+
+extern const wchar_t *place_problem;    // what to show when save_place fails
+
+// Saves the highest deck shown for each sequence item as the setup's place.
+// Returns place_problem when a place could not be saved, otherwise "".
+wstring save_places( const setup &chosen, const vector<opened_window> &opened );
+
+// picks[i] holds the PDFs ticked for setup item i (pick items, and sequence items when not empty).
 // separate puts each picked PDF in its own PdfCraft window.
+// Saves the place of each sequence item that opened.
 // Returns problems to show the user; empty when everything opened.
 vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate );

@@ -357,30 +357,39 @@ void close_panel() {
 void open_panel( const wstring &problem );
 
 void open_class( const today_row &row ) {
+    if ( next_is_busy() ) return;
     profile_file profiles = load_profiles();
     vector<wstring> titles;
     for ( const setup &each : profiles.setups ) titles.push_back( each.title );
     class_click click = plan_class_click( row.meeting, panel.names, panel.tiles, titles );
     close_panel();
 
+    // Next stays busy while the class opens, so a press of Next meanwhile is dropped
     wstring problem;
-    if ( !go_to_class_desktop( click, problem ) ) {
-        open_panel( problem );
-        return;
-    }
+    run_as_busy( [&]() {
+        if ( !go_to_class_desktop( click, problem ) ) return;
+        wstring desktop = current_desktop_name();
 
-    const setup *found = click.setup_title.empty() ? nullptr : find_setup( profiles, click.setup_title );
-    if ( found ) {
+        const setup *found = click.setup_title.empty() ? nullptr : find_setup( profiles, click.setup_title );
+        if ( !found ) return;
         setup chosen = *found;
         pick_answer picks;
         bool asked = false;
         for ( const layout_item &item : chosen.items ) asked = asked || needs_ticks( chosen, item );
-        if ( asked ) picks = ask_for_picks( nullptr, chosen );
+        if ( asked ) {
+            picks = ask_for_picks( nullptr, chosen );
+            // He may have moved to another desktop while the tick list was open
+            wstring switch_problem = picks.accepted ? switch_to_desktop( desktop ) : L"";
+            if ( !switch_problem.empty() ) {
+                problem += ( problem.empty() ? L"" : L" " ) + switch_problem;
+                picks.accepted = false;
+            }
+        }
         if ( !asked || picks.accepted ) {
             vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate );
             for ( const wstring &each : problems ) problem += ( problem.empty() ? L"" : L" " ) + each;
         }
-    }
+    } );
     if ( !problem.empty() ) open_panel( problem );
 }
 
@@ -400,8 +409,12 @@ panel_layout current_layout() {
 }
 
 link link_at( const panel_layout &layout, POINT point ) {
-    for ( int i = 0; i < 4; ++i )
-        if ( PtInRect( &layout.links[i], point ) ) return link( i );
+    for ( int i = 0; i < 4; ++i ) {
+        if ( !PtInRect( &layout.links[i], point ) ) continue;
+        // "last deck" only says no deck follows the place, so it is plain text
+        if ( link( i ) == link::next_deck && panel.deck_link == L"last deck" ) return link::none;
+        return link( i );
+    }
     return link::none;
 }
 

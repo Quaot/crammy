@@ -155,8 +155,18 @@ void snap( const live_window &window ) {
     press_keys( { VK_LWIN, static_cast<WORD>( window.plan.side == L"left" ? VK_LEFT : VK_RIGHT ) } );
 }
 
-void move_window( HWND hwnd, const RECT &target ) {
-    if ( IsIconic( hwnd ) || IsZoomed( hwnd ) ) ShowWindow( hwnd, SW_RESTORE );
+// quietly leaves the focus where it is; SW_RESTORE would bring the window forward
+void move_window( HWND hwnd, const RECT &target, bool quietly = false ) {
+    if ( quietly ) {
+        WINDOWPLACEMENT placement{ sizeof( placement ) };
+        GetWindowPlacement( hwnd, &placement );
+        if ( placement.showCmd != SW_SHOWNORMAL ) {
+            placement.showCmd = SW_SHOWNOACTIVATE;
+            SetWindowPlacement( hwnd, &placement );
+        }
+    } else if ( IsIconic( hwnd ) || IsZoomed( hwnd ) ) {
+        ShowWindow( hwnd, SW_RESTORE );
+    }
     RECT outer;
     GetWindowRect( hwnd, &outer );
     RECT frame = visible_frame( hwnd );
@@ -177,7 +187,8 @@ RECT side_area( const wstring &side, const RECT &screen ) {
 }
 
 // Starts every window, then moves each one to its part of the screen.
-vector<live_window> start_and_place( const vector<planned_window> &plan ) {
+// With a frame, every window is only moved to that frame: no keys are pressed and the focus stays.
+vector<live_window> start_and_place( const vector<planned_window> &plan, const RECT *frame = nullptr ) {
     RECT screen;
     SystemParametersInfoW( SPI_GETWORKAREA, 0, &screen, 0 );
 
@@ -197,6 +208,8 @@ vector<live_window> start_and_place( const vector<planned_window> &plan ) {
             on_side[row]->rows = static_cast<int>( on_side.size() );
         }
     }
+    if ( frame )
+        for ( live_window &window : windows ) window.target = *frame;
 
     for ( live_window &window : windows ) {
         if ( window.plan.app == program::pdfcraft ) {
@@ -230,13 +243,15 @@ vector<live_window> start_and_place( const vector<planned_window> &plan ) {
             }
             if ( !window.hwnd ) { settled = false; continue; }
             if ( !is_in_place( window.hwnd, window.target ) ) {
-                move_window( window.hwnd, window.target );
+                move_window( window.hwnd, window.target, frame != nullptr );
                 settled = false;
             }
         }
         quiet_checks = settled ? quiet_checks + 1 : 0;
         Sleep( 100 );
     }
+
+    if ( frame ) return windows;
 
     // Snap the left side first, so the right side fills the space next to it.
     // A window that did not snap into place is put there directly instead.
@@ -258,19 +273,43 @@ vector<live_window> start_and_place( const vector<planned_window> &plan ) {
     return windows;
 }
 
-}  // namespace
-
-vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems ) {
+vector<opened_window> recorded( const vector<live_window> &windows, vector<wstring> &problems ) {
     vector<opened_window> opened;
-    for ( const live_window &window : start_and_place( plan ) ) {
+    for ( const live_window &window : windows ) {
         if ( !window.hwnd ) {
             problems.push_back( L"No window appeared for " + file_name( window.plan.paths[0] ) );
             continue;
         }
+        DWORD process_id = 0;
+        GetWindowThreadProcessId( window.hwnd, &process_id );
         for ( const wstring &path : window.plan.paths )
-            opened.push_back( { window.hwnd, path, window.plan.app, window.plan.side } );
+            opened.push_back( { window.hwnd, process_id, path, window.plan.app, window.plan.side } );
     }
     return opened;
+}
+
+}  // namespace
+
+vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems ) {
+    return recorded( start_and_place( plan ), problems );
+}
+
+vector<opened_window> open_window_in_place_of( const planned_window &window, HWND old_window, vector<wstring> &problems ) {
+    RECT frame = visible_frame( old_window );
+    // A minimized window's frame is far off screen, so use the whole of its side instead
+    if ( IsIconic( old_window ) ) {
+        RECT screen;
+        SystemParametersInfoW( SPI_GETWORKAREA, 0, &screen, 0 );
+        frame = side_area( window.side, screen );
+    }
+    return recorded( start_and_place( { window }, &frame ), problems );
+}
+
+bool still_ours( HWND window, DWORD process_id ) {
+    DWORD owner = 0;
+    if ( !IsWindow( window ) ) return false;
+    GetWindowThreadProcessId( window, &owner );
+    return owner == process_id;
 }
 
 vector<wstring> open_windows( const vector<planned_window> &plan ) {

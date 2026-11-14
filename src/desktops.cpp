@@ -107,6 +107,12 @@ int current_desktop_index() {
     return index_of( desktop_ids(), current_id() );
 }
 
+wstring current_desktop_name() {
+    vector<wstring> names = desktop_names();
+    int index = current_desktop_index();
+    return index >= 0 && index < int( names.size() ) ? names[index] : L"";
+}
+
 namespace {
 
 const CLSID clsid_desktop_manager = { 0xAA509086, 0x5CA9, 0x4C25, { 0x8F, 0x95, 0x58, 0x9D, 0x3C, 0x07, 0xB4, 0x8A } };

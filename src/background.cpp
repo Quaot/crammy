@@ -248,7 +248,8 @@ int run_background( bool show_panel_now ) {
     window_class.hInstance = instance;
     window_class.lpszClassName = background_class_name;
     RegisterClassW( &window_class );
-    HWND window = CreateWindowExW( 0, background_class_name, L"Crammy", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, instance, nullptr );
+    // The dash greys the mod's next until the first line is set
+    HWND window = CreateWindowExW( 0, background_class_name, L"-Crammy", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, instance, nullptr );
     if ( !window ) return 1;
 
     set_start_at_sign_in( current_settings().start_at_sign_in );

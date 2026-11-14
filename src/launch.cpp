@@ -65,11 +65,13 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
             if ( i < picks.size() ) pdfs = picks[i];
             break;
         case item_kind::sequence: {
-            wstring place = saved_place( chosen );
-            if ( place.empty() ) {
-                if ( i < picks.size() ) pdfs = picks[i];     // no place yet: the ticked decks, as for pick
+            // Ticked decks come first, as for pick: there is no place yet, or --pick named them
+            if ( i < picks.size() && !picks[i].empty() ) {
+                pdfs = picks[i];
                 break;
             }
+            wstring place = saved_place( chosen );
+            if ( place.empty() ) break;
             vector<pdf_file> decks = pick_files( item );
             vector<wstring> names;
             for ( const pdf_file &deck : decks ) names.push_back( deck.name );
@@ -136,9 +138,62 @@ vector<opened_window> open_plan( const setup &chosen, const vector<planned_windo
     return open_windows_recorded( plan, problems );
 }
 
+static bool same_path( const wstring &a, const wstring &b ) {
+    return lower( a ) == lower( b );
+}
+
+vector<wstring> decks_shown( const layout_item &item, const vector<opened_window> &opened ) {
+    vector<wstring> shown;
+    for ( const pdf_file &deck : pick_files( item ) ) {
+        for ( const opened_window &window : opened ) {
+            if ( window.app == program::pdfcraft && same_path( window.path, deck.path ) ) {
+                shown.push_back( deck.path );
+                break;
+            }
+        }
+    }
+    return shown;   // pick_files gives the decks in section order already
+}
+
+static unsigned long long file_size( const wstring &path ) {
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if ( !GetFileAttributesExW( path.c_str(), GetFileExInfoStandard, &data ) ) return 0;
+    return ( static_cast<unsigned long long>( data.nFileSizeHigh ) << 32 ) | data.nFileSizeLow;
+}
+
+// Writes a new copy and then moves it over places.txt, so a failed write never leaves half a file.
+// A places.txt that exists but cannot be read is left alone, since rewriting it would lose its places.
+bool save_place( const wstring &title, const wstring &deck_name ) {
+    wstring path = places_path();
+    std::map<wstring, wstring> places;
+    if ( is_file( path ) ) {
+        wstring text = read_text_file( path );
+        if ( text.empty() && file_size( path ) > 0 ) return false;
+        places = read_places( text );
+    }
+    places[title] = deck_name;
+    wstring temporary = path + L".tmp";
+    return write_text_file( temporary, write_places( places ) ) &&
+           MoveFileExW( temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING );
+}
+
+const wchar_t *place_problem = L"Could not save the place in places.txt.";
+
+wstring save_places( const setup &chosen, const vector<opened_window> &opened ) {
+    for ( const layout_item &item : chosen.items ) {
+        if ( item.kind != item_kind::sequence ) continue;
+        vector<wstring> shown = decks_shown( item, opened );
+        if ( !shown.empty() && !save_place( chosen.title, file_name( shown.back() ) ) ) return place_problem;
+    }
+    return L"";
+}
+
 vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate ) {
     vector<wstring> problems;
     vector<planned_window> plan = plan_setup( chosen, picks, separate, problems );
-    if ( !plan.empty() ) open_plan( chosen, plan, problems );
+    if ( plan.empty() ) return problems;
+    vector<opened_window> opened = open_plan( chosen, plan, problems );
+    wstring problem = save_places( chosen, opened );
+    if ( !problem.empty() ) problems.push_back( problem );
     return problems;
 }
