@@ -23,7 +23,8 @@ section_part read_part( const wstring &text ) {
     size_t digits = 0;
     while ( digits < text.size() && is_digit( text[digits] ) ) ++digits;
     part.is_number = digits > 0;
-    if ( part.is_number ) part.number = std::stoull( text.substr( 0, digits ) );
+    // Digits beyond 18 would overflow; no real section number is that long
+    for ( size_t i = 0; i < digits && i < 18; ++i ) part.number = part.number * 10 + ( text[i] - L'0' );
     part.letters = lower( text.substr( digits ) );
     return part;
 }
