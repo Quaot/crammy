@@ -1,21 +1,28 @@
 // ==WindhawkMod==
 // @id              crammy-button
 // @name            Crammy button
-// @description     Replaces the Widgets button with a button that opens the Crammy panel
-// @version         0.1
+// @description     Replaces the Widgets button with Crammy's line and a next button
+// @version         0.2
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
-// @compilerOptions -lole32 -loleaut32 -lruntimeobject -lshell32 -lgdi32
+// @compilerOptions -lole32 -loleaut32 -lruntimeobject -lshell32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
 # Crammy button
 
-Hides the Widgets button at the left end of the taskbar and puts a button with
-the Crammy icon in its place. A click opens the Crammy panel. If Crammy is not
-running, the click starts `crammy.exe --panel`.
+Hides the Widgets button at the left end of the taskbar and puts Crammy's line
+in its place: the next class, such as `Mon 08:30 MATH 117 tut · DWE 1515`, with
+a `▸ next` button after it. The line is read from Crammy every two seconds.
+
+A click on the line opens the Crammy panel. A click on `▸ next` goes to that
+class's desktop and opens its slides, as Next does in Crammy. The next button is
+greyed when Next has nothing to open for the class.
+
+When Crammy is not running, the line reads `Crammy is not running` with the
+next button greyed, and a click on the line starts `crammy.exe --panel`.
 
 Switch the mod off to bring the Widgets button back.
 */
@@ -25,13 +32,14 @@ Switch the mod off to bring the Widgets button back.
 /*
 - crammy_path: C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe
   $name: Path to crammy.exe
-  $description: The program to start when Crammy is not running. The button's icon is read from it.
+  $description: The program to start when Crammy is not running.
 */
 // ==/WindhawkModSettings==
 
 #include <windhawk_utils.h>
 
 #include <atomic>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -39,29 +47,30 @@ Switch the mod off to bring the Widgets button back.
 
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.UI.Xaml.Automation.h>
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
-#include <winrt/Windows.UI.Xaml.Media.Imaging.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.h>
 #include <winrt/base.h>
 
 using namespace winrt::Windows::UI::Xaml;
 
-const wchar_t button_name[] = L"CrammyButton";
-const int icon_pixels = 48;
+const wchar_t line_name[] = L"CrammyLine";
+const wchar_t not_running_text[] = L"Crammy is not running";
 
-struct placed_button {
-    winrt::weak_ref<Controls::Button> button;
-    Controls::Primitives::ButtonBase::Click_revoker click;
+struct placed_line {
+    winrt::weak_ref<Controls::StackPanel> panel;
+    Controls::Primitives::ButtonBase::Click_revoker text_click;
+    Controls::Primitives::ButtonBase::Click_revoker next_click;
+    DispatcherTimer timer{ nullptr };
+    DispatcherTimer::Tick_revoker tick;
 };
 
 std::wstring g_crammy_path;
 std::atomic<bool> g_unloading;
 std::atomic<bool> g_taskbar_view_hooked;
-std::vector<placed_button> g_buttons;
+std::vector<placed_line> g_lines;
 std::vector<winrt::weak_ref<FrameworkElement>> g_hidden_widgets;
 FrameworkElement::Loaded_revoker g_loaded_revoker;
 
@@ -82,35 +91,45 @@ void show_panel() {
                    folder.empty() ? nullptr : folder.c_str(), SW_SHOWNORMAL );
 }
 
-Media::ImageSource load_icon( const std::wstring &path ) {
-    HICON icon = nullptr;
-    if ( PrivateExtractIconsW( path.c_str(), 0, icon_pixels, icon_pixels, &icon, nullptr, 1, 0 ) != 1 || !icon ) {
-        return nullptr;
+void press_next() {
+    static const UINT next_message = RegisterWindowMessageW( L"CrammyNext" );
+    if ( HWND crammy_window = FindWindowW( L"CrammyBackground", nullptr ) ) {
+        // Next may switch desktops and open windows, so Crammy may take the focus.
+        DWORD crammy_process = 0;
+        GetWindowThreadProcessId( crammy_window, &crammy_process );
+        AllowSetForegroundWindow( crammy_process );
+        PostMessageW( crammy_window, next_message, 0, 0 );
     }
-    ICONINFO info{};
-    GetIconInfo( icon, &info );
-    BITMAPINFO bitmap_info{};
-    bitmap_info.bmiHeader = { sizeof( BITMAPINFOHEADER ), icon_pixels, -icon_pixels, 1, 32, BI_RGB };
-    std::vector<BYTE> pixels( icon_pixels * icon_pixels * 4 );
-    HDC screen = GetDC( nullptr );
-    int lines = info.hbmColor ? GetDIBits( screen, info.hbmColor, 0, icon_pixels, pixels.data(), &bitmap_info, DIB_RGB_COLORS ) : 0;
-    ReleaseDC( nullptr, screen );
-    if ( info.hbmColor ) DeleteObject( info.hbmColor );
-    if ( info.hbmMask ) DeleteObject( info.hbmMask );
-    DestroyIcon( icon );
-    if ( lines != icon_pixels ) {
-        return nullptr;
-    }
-    // WriteableBitmap expects premultiplied alpha; icons store it straight.
-    for ( size_t i = 0; i < pixels.size(); i += 4 ) {
-        for ( size_t k = 0; k < 3; k++ ) {
-            pixels[i + k] = (BYTE)( pixels[i + k] * pixels[i + 3] / 255 );
+}
+
+// Crammy keeps the line as the title of its CrammyBackground window. A title
+// starting with "-" means Next has nothing to open for that class.
+void refresh_line( Controls::TextBlock text, Controls::Button next ) {
+    std::wstring line = not_running_text;
+    bool can_next = false;
+    if ( HWND crammy_window = FindWindowW( L"CrammyBackground", nullptr ) ) {
+        // The window belongs to another process, so GetWindowTextW reads the
+        // stored title and sends Crammy no message; a hung Crammy cannot block it.
+        wchar_t title[128] = {};
+        GetWindowTextW( crammy_window, title, ARRAYSIZE( title ) );
+        line = title;
+        can_next = true;
+        if ( !line.empty() && line[0] == L'-' ) {
+            line.erase( 0, 1 );
+            can_next = false;
+        }
+        if ( line.empty() ) {
+            // The window may have closed after FindWindowW found it.
+            line = L"Crammy";
+            can_next = false;
         }
     }
-    Media::Imaging::WriteableBitmap bitmap( icon_pixels, icon_pixels );
-    memcpy( bitmap.PixelBuffer().data(), pixels.data(), pixels.size() );
-    bitmap.Invalidate();
-    return bitmap;
+    if ( text.Text() != line ) {
+        text.Text( line );
+    }
+    if ( next.IsEnabled() != can_next ) {
+        next.IsEnabled( can_next );
+    }
 }
 
 FrameworkElement find_child( FrameworkElement element, PCWSTR name, bool by_class ) {
@@ -134,37 +153,103 @@ FrameworkElement find_parent_by_class( FrameworkElement element, PCWSTR class_na
     return nullptr;
 }
 
-void add_button( Controls::Grid root_grid ) {
+// The buttons keep the taskbar's own font and text colour: only the
+// background is cleared, as on the taskbar's own buttons.
+Controls::Button make_button( Controls::TextBlock text ) {
+    Controls::Button button;
+    button.Content( text );
+    button.Height( 40 );
+    button.Padding( Thickness{ 8, 0, 8, 0 } );
+    button.BorderThickness( Thickness{ 0, 0, 0, 0 } );
+    button.Background( Media::SolidColorBrush( winrt::Windows::UI::Color{ 0, 0, 0, 0 } ) );
+    button.VerticalAlignment( VerticalAlignment::Center );
+    return button;
+}
+
+void add_line( Controls::Grid root_grid ) {
+    // The taskbar can drop its tree, for example when a monitor goes away.
+    std::erase_if( g_lines, []( placed_line &placed ) {
+        if ( placed.panel.get() ) {
+            return false;
+        }
+        if ( placed.timer ) {
+            placed.timer.Stop();
+        }
+        return true;
+    } );
     for ( auto child : root_grid.Children() ) {
         auto element = child.try_as<FrameworkElement>();
-        if ( element && element.Name() == button_name ) {
+        if ( element && element.Name() == line_name ) {
             return;
         }
     }
-    Controls::Image image;
-    image.Source( load_icon( g_crammy_path ) );
-    image.Width( 24 );
-    image.Height( 24 );
+    Controls::TextBlock text;
+    text.TextWrapping( TextWrapping::NoWrap );
+    text.TextTrimming( TextTrimming::CharacterEllipsis );
+    text.MaxWidth( 360 );
+    text.VerticalAlignment( VerticalAlignment::Center );
+    Controls::Button text_button = make_button( text );
 
-    Controls::Button button;
-    button.Name( button_name );
-    button.Content( image );
-    button.Width( 40 );
-    button.Height( 40 );
-    button.Padding( Thickness{ 0, 0, 0, 0 } );
-    button.Margin( Thickness{ 4, 0, 0, 0 } );
-    button.BorderThickness( Thickness{ 0, 0, 0, 0 } );
-    button.Background( Media::SolidColorBrush( winrt::Windows::UI::Color{ 0, 0, 0, 0 } ) );
-    button.HorizontalAlignment( HorizontalAlignment::Left );
-    button.VerticalAlignment( VerticalAlignment::Center );
-    root_grid.Children().Append( button );
+    Controls::TextBlock next_text;
+    next_text.Text( L"\u25B8 next" );
+    next_text.VerticalAlignment( VerticalAlignment::Center );
+    Controls::Button next_button = make_button( next_text );
+    next_button.Margin( Thickness{ 2, 0, 0, 0 } );
+    Automation::AutomationProperties::SetName( next_button, L"Next class" );
 
-    auto click = button.Click( winrt::auto_revoke, []( auto &&, auto && ) { show_panel(); } );
-    g_buttons.push_back( { winrt::make_weak( button ), std::move( click ) } );
+    Controls::StackPanel panel;
+    panel.Name( line_name );
+    panel.Orientation( Controls::Orientation::Horizontal );
+    panel.Margin( Thickness{ 4, 0, 0, 0 } );
+    panel.HorizontalAlignment( HorizontalAlignment::Left );
+    panel.VerticalAlignment( VerticalAlignment::Center );
+    panel.Children().Append( text_button );
+    panel.Children().Append( next_button );
+
+    refresh_line( text, next_button );
+
+    placed_line placed;
+    placed.panel = winrt::make_weak( panel );
+    placed.text_click = text_button.Click( winrt::auto_revoke, []( auto &&, auto && ) {
+        try {
+            show_panel();
+        } catch ( ... ) {
+            Wh_Log( L"Opening the panel failed" );
+        }
+    } );
+    placed.next_click = next_button.Click( winrt::auto_revoke, []( auto &&, auto && ) {
+        try {
+            press_next();
+        } catch ( ... ) {
+            Wh_Log( L"Sending Next failed" );
+        }
+    } );
+    // The timer runs on the taskbar's thread, so its ticks may touch the XAML.
+    placed.timer = DispatcherTimer();
+    placed.timer.Interval( std::chrono::seconds( 2 ) );
+    placed.tick = placed.timer.Tick( winrt::auto_revoke,
+        [weak_text = winrt::make_weak( text ), weak_next = winrt::make_weak( next_button )]( auto const &sender, auto && ) {
+            auto text = weak_text.get();
+            auto next = weak_next.get();
+            if ( g_unloading || !text || !next ) {
+                if ( auto timer = sender.template try_as<DispatcherTimer>() ) {
+                    timer.Stop();
+                }
+                return;
+            }
+            try {
+                refresh_line( text, next );
+            } catch ( ... ) {
+                Wh_Log( L"Refreshing the line failed" );
+            }
+        } );
+    placed.timer.Start();
+    // Added last, so an error above leaves nothing in the taskbar's tree.
+    root_grid.Children().Append( panel );
+    g_lines.push_back( std::move( placed ) );
 }
 
-// Returns false when the button is not in the taskbar's tree yet.
-bool replace_widgets( FrameworkElement widgets ) {
+bool replace_widgets_unguarded( FrameworkElement widgets ) {
     auto frame = find_parent_by_class( widgets, L"Taskbar.TaskbarFrame" );
     auto root_grid = frame ? find_child( frame, L"RootGrid", false ).try_as<Controls::Grid>() : nullptr;
     if ( !root_grid ) {
@@ -181,22 +266,38 @@ bool replace_widgets( FrameworkElement widgets ) {
     if ( !known ) {
         g_hidden_widgets.push_back( winrt::make_weak( widgets ) );
     }
-    add_button( root_grid );
+    add_line( root_grid );
     return true;
+}
+
+// Returns false when the Widgets button is not in the taskbar's tree yet.
+// This runs inside the taskbar's own code, so no WinRT error may leave it.
+bool replace_widgets( FrameworkElement widgets ) {
+    try {
+        return replace_widgets_unguarded( widgets );
+    } catch ( ... ) {
+        Wh_Log( L"Placing the line failed" );
+        return true;
+    }
 }
 
 void restore_all() {
     g_loaded_revoker.revoke();
-    for ( auto &placed : g_buttons ) {
-        placed.click.revoke();
-        auto button = placed.button.get();
-        auto panel = button ? Media::VisualTreeHelper::GetParent( button ).try_as<Controls::Panel>() : nullptr;
+    for ( auto &placed : g_lines ) {
+        if ( placed.timer ) {
+            placed.timer.Stop();
+        }
+        placed.tick.revoke();
+        placed.text_click.revoke();
+        placed.next_click.revoke();
+        auto line = placed.panel.get();
+        auto parent = line ? Media::VisualTreeHelper::GetParent( line ).try_as<Controls::Panel>() : nullptr;
         uint32_t index = 0;
-        if ( panel && panel.Children().IndexOf( button, index ) ) {
-            panel.Children().RemoveAt( index );
+        if ( parent && parent.Children().IndexOf( line, index ) ) {
+            parent.Children().RemoveAt( index );
         }
     }
-    g_buttons.clear();
+    g_lines.clear();
     for ( auto &hidden : g_hidden_widgets ) {
         if ( auto widgets = hidden.get() ) {
             widgets.Visibility( Visibility::Visible );
@@ -298,7 +399,7 @@ HWND find_taskbar_window() {
 }
 
 // XAML objects may only be touched from the taskbar's own thread.
-void run_on_taskbar_thread( void ( *proc )( HWND ) ) {
+bool run_on_taskbar_thread( void ( *proc )( HWND ) ) {
     static const UINT run_message = RegisterWindowMessageW( L"Windhawk_RunFromWindowThread_" WH_MOD_ID );
     struct run_request {
         void ( *proc )( HWND );
@@ -306,7 +407,7 @@ void run_on_taskbar_thread( void ( *proc )( HWND ) ) {
     };
     HWND window = find_taskbar_window();
     if ( !window ) {
-        return;
+        return false;
     }
     DWORD thread_id = GetWindowThreadProcessId( window, nullptr );
     HHOOK hook = SetWindowsHookExW( WH_CALLWNDPROC, []( int code, WPARAM wparam, LPARAM lparam ) -> LRESULT {
@@ -318,21 +419,31 @@ void run_on_taskbar_thread( void ( *proc )( HWND ) ) {
         return CallNextHookEx( nullptr, code, wparam, lparam );
     }, nullptr, thread_id );
     if ( !hook ) {
-        return;
+        return false;
     }
     run_request request{ proc, window };
     SendMessageW( window, run_message, 0, (LPARAM)&request );
     UnhookWindowsHookEx( hook );
+    return true;
 }
 
+// These run inside a message sent to the taskbar, so no WinRT error may leave them.
 void apply_on_taskbar( HWND window ) {
-    if ( auto xaml_root = taskbar_xaml_root( window ) ) {
-        apply_all( xaml_root );
+    try {
+        if ( auto xaml_root = taskbar_xaml_root( window ) ) {
+            apply_all( xaml_root );
+        }
+    } catch ( ... ) {
+        Wh_Log( L"Placing the line failed" );
     }
 }
 
 void restore_on_taskbar( HWND ) {
-    restore_all();
+    try {
+        restore_all();
+    } catch ( ... ) {
+        Wh_Log( L"Removing the line failed" );
+    }
 }
 
 void load_settings() {
@@ -409,7 +520,11 @@ void Wh_ModAfterInit() {
 
 void Wh_ModBeforeUninit() {
     g_unloading = true;
-    run_on_taskbar_thread( restore_on_taskbar );
+    // Without the taskbar thread the timers cannot be stopped here, and one
+    // that ticks after the mod is freed would crash Explorer.
+    if ( !run_on_taskbar_thread( restore_on_taskbar ) ) {
+        Wh_Log( L"Could not reach the taskbar thread to remove the line" );
+    }
 }
 
 void Wh_ModSettingsChanged() {
