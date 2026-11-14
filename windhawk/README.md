@@ -15,7 +15,7 @@ A click on the rows opens the Crammy panel, because the mod posts the `CrammySho
 
 To move from an older version, open the mod in Windhawk, press Edit, paste the new `crammy-button.wh.cpp` over the old code, and press Compile Mod again.
 
-The mod has two settings. The first is the path to `crammy.exe`, which starts as `C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe`; change it if Crammy moves. The second, `line_width`, is the widest the two rows may be, in pixels at 100% scaling. It starts at 150, the width of the weather's spot before the Start button. Lower it if the rows reach the Start button, or raise it if the taskbar's buttons are not centred. A row that does not fit ends in an ellipsis.
+The mod has two settings. The first is the path to `crammy.exe`, which starts as `C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe`; change it if Crammy moves. The second, `line_width`, is the widest the whole line may be, `▸` included, in pixels at 100% scaling. It starts at 150, the width of the weather's spot before the Start button. The `▸` button always keeps its full width, and the rows get what is left. Lower it if the line reaches the Start button, or raise it if the taskbar's buttons are not centred. A row that does not fit ends in an ellipsis.
 
 ## Switching it off
 
