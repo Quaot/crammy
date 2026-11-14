@@ -30,7 +30,7 @@ const int chips_per_row = 4;
 const int chip_height = 44;
 const int chip_gap = 4;
 const int icon_size = 16;
-const int icon_gap = 5;
+const int icon_gap = 3;
 const int max_icons = 3;
 const int link_height = 20;
 const int link_gap = 10;
@@ -210,6 +210,7 @@ void draw_chip( HDC dc, const desktop_tile &tile, const RECT &box, const panel_f
     // The icons sit on their own row under the name, clear of the border
     int x = box.left + px( 6 ), y = box.bottom - px( 7 ) - size;
     for ( size_t i = 0; i < tile.program_paths.size() && int( i ) < max_icons; ++i ) {
+        if ( x + size > box.right - px( 5 ) ) break;    // no room left inside the border
         HICON icon = icon_of( tile.program_paths[i], size );
         if ( icon ) DrawIconEx( dc, x, y, icon, size, size, 0, nullptr, DI_NORMAL );
         x += size + px( icon_gap );
