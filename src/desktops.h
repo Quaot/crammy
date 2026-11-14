@@ -14,6 +14,9 @@ vector<wstring> desktop_names();
 // Index into desktop_names() of the desktop showing, or -1.
 int current_desktop_index();
 
+// The name of the desktop showing, or "".
+wstring current_desktop_name();
+
 struct window_on_desktop {
     HWND window;
     int desktop_index;      // index into desktop_names()

@@ -10,6 +10,9 @@
 // Remembers the hidden background window, sets its title and starts the timers.
 void start_next_runner( HWND background_window );
 
+// True while Next or next deck is opening windows, or while a tick list is open.
+bool next_is_busy();
+
 // Called for every WM_TIMER of the background window; ignores timers that are not Next's.
 void on_next_timer( UINT_PTR timer_id );
 

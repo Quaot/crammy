@@ -357,6 +357,7 @@ void close_panel() {
 void open_panel( const wstring &problem );
 
 void open_class( const today_row &row ) {
+    if ( next_is_busy() ) return;
     profile_file profiles = load_profiles();
     vector<wstring> titles;
     for ( const setup &each : profiles.setups ) titles.push_back( each.title );
@@ -368,6 +369,7 @@ void open_class( const today_row &row ) {
         open_panel( problem );
         return;
     }
+    wstring desktop = current_desktop_name();
 
     const setup *found = click.setup_title.empty() ? nullptr : find_setup( profiles, click.setup_title );
     if ( found ) {
@@ -375,7 +377,12 @@ void open_class( const today_row &row ) {
         pick_answer picks;
         bool asked = false;
         for ( const layout_item &item : chosen.items ) asked = asked || needs_ticks( chosen, item );
-        if ( asked ) picks = ask_for_picks( nullptr, chosen );
+        if ( asked ) {
+            picks = ask_for_picks( nullptr, chosen );
+            // He may have moved to another desktop while the tick list was open
+            if ( picks.accepted ) problem = switch_to_desktop( desktop );
+            if ( !problem.empty() ) picks.accepted = false;
+        }
         if ( !asked || picks.accepted ) {
             vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate );
             for ( const wstring &each : problems ) problem += ( problem.empty() ? L"" : L" " ) + each;
