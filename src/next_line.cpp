@@ -6,7 +6,7 @@ namespace {
 
 const int days_ahead = 14;
 const int soon_minutes = 60;
-const size_t longest_line = 48;
+const size_t longest_row = 24;
 const wchar_t *const day_names[] = { L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat", L"Sun" };
 const wstring separator = L" · ";
 
@@ -35,6 +35,11 @@ wstring two_digits( int number ) {
 
 wstring clock_text( int minute ) {
     return two_digits( minute / 60 ) + L":" + two_digits( minute % 60 );
+}
+
+wstring cut_row( const wstring &row ) {
+    if ( row.size() <= longest_row ) return row;
+    return row.substr( 0, longest_row - 1 ) + L"…";
 }
 
 }  // namespace
@@ -68,23 +73,23 @@ next_class find_next_class( const vector<class_block> &blocks, calendar_date tod
     return next;
 }
 
+// Two rows, like the weather on the taskbar: the class, then where and when
 wstring line_text( const next_class &next, int minute_now, const wstring &deck ) {
     if ( !next.found ) return L"No classes";
     const class_meeting &meeting = next.meeting;
-    wstring name = meeting.course + L" " + lower( meeting.kind ).substr( 0, 3 );
-    wstring line;
+    wstring top = meeting.course + L" " + lower( meeting.kind ).substr( 0, 3 );
+    wstring bottom;
     if ( !next.today ) {
-        line = wstring( day_names[weekday_of( next.date )] ) + L" " + clock_text( meeting.start_minute )
-               + L" " + name + separator + meeting.room;
+        bottom = wstring( day_names[weekday_of( next.date )] ) + L" " + clock_text( meeting.start_minute )
+                 + separator + meeting.room;
     } else if ( !deck.empty() ) {
-        line = name + separator + deck;
+        bottom = deck;
     } else {
-        line = name + separator + meeting.room + separator;
+        bottom = meeting.room + separator;
         int minutes = meeting.start_minute - minute_now;
-        if ( minutes <= 0 ) line += L"now";
-        else if ( minutes <= soon_minutes ) line += L"in " + std::to_wstring( minutes ) + L"m";
-        else line += clock_text( meeting.start_minute );
+        if ( minutes <= 0 ) bottom += L"now";
+        else if ( minutes <= soon_minutes ) bottom += L"in " + std::to_wstring( minutes ) + L"m";
+        else bottom += clock_text( meeting.start_minute );
     }
-    if ( line.size() > longest_line ) line = line.substr( 0, longest_line - 1 ) + L"…";
-    return line;
+    return cut_row( top ) + L"\n" + cut_row( bottom );
 }

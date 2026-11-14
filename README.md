@@ -43,13 +43,13 @@ The timetable is `timetable.txt` and the settings are `settings.txt`, both next 
 
 ## Next and the taskbar line
 
-With the Windhawk mod switched on, the taskbar shows one line about the next class where the weather was, such as `ECE 150 lec · PSE 5353 · in 5m`. The line names the class on now, or else the next one today. After the last class of the day, it shows the first class of the next day with classes. Crammy works the line out again every 10 seconds.
+With the Windhawk mod switched on, the taskbar shows the next class where the weather was, in two small rows like the weather's. The top row names the class, such as `ECE 150 lec`, and the row under it says where and when, such as `PSE 5353 · in 5m`. For a class on another day, the bottom row starts with its weekday and start time, as in `Tue 10:30 · DWE 3516`. A row longer than 24 characters is cut short with an ellipsis. The line names the class on now, or else the next one today. After the last class of the day, it shows the first class of the next day with classes. Crammy works the line out again every 10 seconds.
 
-Pressing `▸ next` after the line goes to that class's desktop and opens its setup, as a class click in the panel does. When every file of the setup is already showing in windows Next opened, it only switches. For a course with no folder in Downloads, the button is greyed.
+Pressing `▸`, to the right of the two rows, goes to that class's desktop and opens its setup, as a class click in the panel does. When every file of the setup is already showing in windows Next opened, it only switches. For a course with no folder in Downloads, the button is greyed.
 
 After Next opens a setup, Crammy watches the folder of every `newest` line until midnight or the next press of Next. A newer download that fits the pattern opens over the old slides once its size has stopped changing, and the window with the old slides closes. This happens only while that desktop is showing, and Crammy closes only windows it opened itself.
 
-The ECE 150 lecture setup uses a `sequence` line. Next opens the deck after the place saved in `places.txt`, and shows the tick list when there is no place yet. Opening the setup any other way saves the place as well, as the highest deck opened. Every way of opening also writes the decks it opened to `decks today.txt`, next to `places.txt`. A second open on the same day shows the same decks again, and only next deck moves on. While those decks are open, the line shows the deck's name where the room was.
+The ECE 150 lecture setup uses a `sequence` line. Next opens the deck after the place saved in `places.txt`, and shows the tick list when there is no place yet. Opening the setup any other way saves the place as well, as the highest deck opened. Every way of opening also writes the decks it opened to `decks today.txt`, next to `places.txt`. A second open on the same day shows the same decks again, and only next deck moves on. While those decks are open, the deck's name takes the whole bottom row, in place of the room and time.
 
 The next deck is reached from the panel only. Its `next deck` link reopens the PdfCraft window with today's decks and the following one as tabs, and moves the place on. At the last deck the link reads `last deck` and does nothing.
 

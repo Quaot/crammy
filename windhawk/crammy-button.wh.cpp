@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.2
+// @version         0.3
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -14,15 +14,21 @@
 # Crammy button
 
 Hides the Widgets button at the left end of the taskbar and puts Crammy's line
-in its place: the next class, such as `Mon 08:30 MATH 117 tut · DWE 1515`, with
-a `▸ next` button after it. The line is read from Crammy every two seconds.
+in its place, in two small rows like the weather's: the next class on top, such
+as `MATH 117 tut`, and where and when below it, such as `Mon 08:30 · DWE 1515`.
+The `▸` button to the right of the rows is the next button. The line is read
+from Crammy every two seconds.
 
-A click on the line opens the Crammy panel. A click on `▸ next` goes to that
-class's desktop and opens its slides, as Next does in Crammy. The next button is
-greyed when Next has nothing to open for the class.
+A click on the rows opens the Crammy panel. A click on `▸` goes to that class's
+desktop and opens its slides, as Next does in Crammy. The next button is greyed
+when Next has nothing to open for the class.
 
-When Crammy is not running, the line reads `Crammy is not running` with the
-next button greyed, and a click on the line starts `crammy.exe --panel`.
+When Crammy is not running, the top row reads `Crammy is not running` with the
+next button greyed, and a click on it starts `crammy.exe --panel`.
+
+The rows are kept within the width set as `line_width`, 150 by default, so
+they stay in the space the Widgets button had, before the Start button. A row
+that does not fit ends in an ellipsis.
 
 Switch the mod off to bring the Widgets button back.
 */
@@ -33,6 +39,9 @@ Switch the mod off to bring the Widgets button back.
 - crammy_path: C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe
   $name: Path to crammy.exe
   $description: The program to start when Crammy is not running.
+- line_width: 150
+  $name: Width of the line
+  $description: The widest the two rows may be, in pixels at 100% scaling. Lower it if the rows reach the Start button.
 */
 // ==/WindhawkModSettings==
 
@@ -58,6 +67,7 @@ using namespace winrt::Windows::UI::Xaml;
 
 const wchar_t line_name[] = L"CrammyLine";
 const wchar_t not_running_text[] = L"Crammy is not running";
+const int default_line_width = 150;
 
 struct placed_line {
     winrt::weak_ref<Controls::StackPanel> panel;
@@ -68,6 +78,7 @@ struct placed_line {
 };
 
 std::wstring g_crammy_path;
+std::atomic<int> g_line_width{ default_line_width };
 std::atomic<bool> g_unloading;
 std::atomic<bool> g_taskbar_view_hooked;
 std::vector<placed_line> g_lines;
@@ -102,9 +113,16 @@ void press_next() {
     }
 }
 
-// Crammy keeps the line as the title of its CrammyBackground window. A title
-// starting with "-" means Next has nothing to open for that class.
-void refresh_line( Controls::TextBlock text, Controls::Button next ) {
+void set_text( Controls::TextBlock text, const std::wstring &value ) {
+    if ( text.Text() != value ) {
+        text.Text( value );
+    }
+}
+
+// Crammy keeps the line as the title of its CrammyBackground window, with a
+// newline between its two rows. A title starting with "-" means Next has
+// nothing to open for that class.
+void refresh_line( Controls::TextBlock top, Controls::TextBlock bottom, Controls::Button next ) {
     std::wstring line = not_running_text;
     bool can_next = false;
     if ( HWND crammy_window = FindWindowW( L"CrammyBackground", nullptr ) ) {
@@ -124,8 +142,15 @@ void refresh_line( Controls::TextBlock text, Controls::Button next ) {
             can_next = false;
         }
     }
-    if ( text.Text() != line ) {
-        text.Text( line );
+    // A line of one row, such as "No classes", leaves the bottom row hidden.
+    size_t newline = line.find( L'\n' );
+    std::wstring top_row = line.substr( 0, newline );
+    std::wstring bottom_row = newline == std::wstring::npos ? L"" : line.substr( newline + 1 );
+    set_text( top, top_row );
+    set_text( bottom, bottom_row );
+    Visibility bottom_shown = bottom_row.empty() ? Visibility::Collapsed : Visibility::Visible;
+    if ( bottom.Visibility() != bottom_shown ) {
+        bottom.Visibility( bottom_shown );
     }
     if ( next.IsEnabled() != can_next ) {
         next.IsEnabled( can_next );
@@ -153,17 +178,26 @@ FrameworkElement find_parent_by_class( FrameworkElement element, PCWSTR class_na
     return nullptr;
 }
 
-// The buttons keep the taskbar's own font and text colour: only the
+// The buttons keep the taskbar's own typeface and text colour: only the
 // background is cleared, as on the taskbar's own buttons.
-Controls::Button make_button( Controls::TextBlock text ) {
+Controls::Button make_button( UIElement content, double side_padding ) {
     Controls::Button button;
-    button.Content( text );
+    button.Content( content );
     button.Height( 40 );
-    button.Padding( Thickness{ 8, 0, 8, 0 } );
+    button.Padding( Thickness{ side_padding, 0, side_padding, 0 } );
     button.BorderThickness( Thickness{ 0, 0, 0, 0 } );
     button.Background( Media::SolidColorBrush( winrt::Windows::UI::Color{ 0, 0, 0, 0 } ) );
     button.VerticalAlignment( VerticalAlignment::Center );
     return button;
+}
+
+// One of the two rows, in a smaller font than the taskbar's, as the weather's are.
+Controls::TextBlock make_row() {
+    Controls::TextBlock row;
+    row.FontSize( 12 );
+    row.TextWrapping( TextWrapping::NoWrap );
+    row.TextTrimming( TextTrimming::CharacterEllipsis );
+    return row;
 }
 
 void add_line( Controls::Grid root_grid ) {
@@ -183,18 +217,21 @@ void add_line( Controls::Grid root_grid ) {
             return;
         }
     }
-    Controls::TextBlock text;
-    text.TextWrapping( TextWrapping::NoWrap );
-    text.TextTrimming( TextTrimming::CharacterEllipsis );
-    text.MaxWidth( 360 );
-    text.VerticalAlignment( VerticalAlignment::Center );
-    Controls::Button text_button = make_button( text );
+    Controls::TextBlock top = make_row();
+    Controls::TextBlock bottom = make_row();
+    bottom.Opacity( 0.8 );
+    Controls::StackPanel rows;
+    rows.Orientation( Controls::Orientation::Vertical );
+    rows.MaxWidth( g_line_width );
+    rows.VerticalAlignment( VerticalAlignment::Center );
+    rows.Children().Append( top );
+    rows.Children().Append( bottom );
+    Controls::Button text_button = make_button( rows, 6 );
 
     Controls::TextBlock next_text;
-    next_text.Text( L"\u25B8 next" );
+    next_text.Text( L"\u25B8" );
     next_text.VerticalAlignment( VerticalAlignment::Center );
-    Controls::Button next_button = make_button( next_text );
-    next_button.Margin( Thickness{ 2, 0, 0, 0 } );
+    Controls::Button next_button = make_button( next_text, 4 );
     Automation::AutomationProperties::SetName( next_button, L"Next class" );
 
     Controls::StackPanel panel;
@@ -206,7 +243,7 @@ void add_line( Controls::Grid root_grid ) {
     panel.Children().Append( text_button );
     panel.Children().Append( next_button );
 
-    refresh_line( text, next_button );
+    refresh_line( top, bottom, next_button );
 
     placed_line placed;
     placed.panel = winrt::make_weak( panel );
@@ -228,17 +265,19 @@ void add_line( Controls::Grid root_grid ) {
     placed.timer = DispatcherTimer();
     placed.timer.Interval( std::chrono::seconds( 2 ) );
     placed.tick = placed.timer.Tick( winrt::auto_revoke,
-        [weak_text = winrt::make_weak( text ), weak_next = winrt::make_weak( next_button )]( auto const &sender, auto && ) {
-            auto text = weak_text.get();
+        [weak_top = winrt::make_weak( top ), weak_bottom = winrt::make_weak( bottom ),
+         weak_next = winrt::make_weak( next_button )]( auto const &sender, auto && ) {
+            auto top = weak_top.get();
+            auto bottom = weak_bottom.get();
             auto next = weak_next.get();
-            if ( g_unloading || !text || !next ) {
+            if ( g_unloading || !top || !bottom || !next ) {
                 if ( auto timer = sender.template try_as<DispatcherTimer>() ) {
                     timer.Stop();
                 }
                 return;
             }
             try {
-                refresh_line( text, next );
+                refresh_line( top, bottom, next );
             } catch ( ... ) {
                 Wh_Log( L"Refreshing the line failed" );
             }
@@ -450,6 +489,8 @@ void load_settings() {
     PCWSTR path = Wh_GetStringSetting( L"crammy_path" );
     g_crammy_path = path;
     Wh_FreeStringSetting( path );
+    int width = Wh_GetIntSetting( L"line_width" );
+    g_line_width = width > 0 ? width : default_line_width;
 }
 
 HMODULE taskbar_view_module() {
