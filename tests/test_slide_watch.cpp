@@ -8,7 +8,7 @@
 
 namespace {
 
-const wstring folder = L"C:\M\1 Lectures\PDF\\";
+const wstring folder = L"C:\\M\\1 Lectures\\PDF\\";
 
 watched_slide math_watch() {
     return { folder + L"MATH117-L*.pdf", folder + L"MATH117-L23.pdf", 100 };
@@ -37,9 +37,9 @@ void test_slide_watch() {
     // Files that must be ignored
     check( replacement_for( watch, { seen( folder + L"MATH115-W10-Shell.pdf", 200 ) } ).empty(),
            "a file that does not match the pattern is ignored" );
-    check( replacement_for( watch, { seen( L"C:\M\Other\MATH117-L24.pdf", 200 ) } ).empty(),
+    check( replacement_for( watch, { seen( L"C:\\M\\Other\\MATH117-L24.pdf", 200 ) } ).empty(),
            "a match in another folder is ignored" );
-    check( replacement_for( watch, { seen( L"c:\m\1 lectures\pdf\math117-l23.pdf", 200 ) } ).empty(),
+    check( replacement_for( watch, { seen( L"c:\\m\\1 lectures\\pdf\\math117-l23.pdf", 200 ) } ).empty(),
            "the open file itself is ignored, whatever its case" );
     check( replacement_for( watch, { seen( folder + L"MATH117-L22.pdf", 50 ) } ).empty(),
            "a file older than the open one is ignored" );
@@ -57,7 +57,7 @@ void test_slide_watch() {
     check( replacement_for( watch, {} ).empty(), "an empty list gives no replacement" );
 
     // ECE 190 slides and summaries sit side by side
-    wstring ece = L"C:\E\1 Lectures\PDF\\";
+    wstring ece = L"C:\\E\\1 Lectures\\PDF\\";
     vector<seen_file> ece_files = { seen( ece + L"ECE190-W11-Slides.pdf", 200 ), seen( ece + L"ECE190-W11-Sum.pdf", 200 ) };
     watched_slide slides_watch = { ece + L"ECE190-W*-Slides.pdf", ece + L"ECE190-W10-Slides.pdf", 100 };
     watched_slide sum_watch = { ece + L"ECE190-W*-Sum.pdf", ece + L"ECE190-W10-Sum.pdf", 100 };
@@ -65,13 +65,13 @@ void test_slide_watch() {
     check( replacement_for( sum_watch, ece_files ) == ece + L"ECE190-W11-Sum.pdf", "the summary watch picks the W11 summary" );
 
     // matches_pattern
-    wstring lecture_pattern = L"C:\A\MATH117-L*.pdf";
-    check( matches_pattern( L"C:\A\MATH117-L24.pdf", lecture_pattern ), "a lecture file matches its pattern" );
-    check( matches_pattern( L"c:\a\math117-l24.PDF", lecture_pattern ), "matching ignores case" );
-    check( !matches_pattern( L"C:\A\MATH117-L24.pdf", L"C:\B\MATH117-L*.pdf" ), "a different folder does not match" );
-    check( !matches_pattern( L"C:\A\ECE190-W11-Sum.pdf", L"C:\A\ECE190-W*-Slides.pdf" ),
+    wstring lecture_pattern = L"C:\\A\\MATH117-L*.pdf";
+    check( matches_pattern( L"C:\\A\\MATH117-L24.pdf", lecture_pattern ), "a lecture file matches its pattern" );
+    check( matches_pattern( L"c:\\a\\math117-l24.PDF", lecture_pattern ), "matching ignores case" );
+    check( !matches_pattern( L"C:\\A\\MATH117-L24.pdf", L"C:\\B\\MATH117-L*.pdf" ), "a different folder does not match" );
+    check( !matches_pattern( L"C:\\A\\ECE190-W11-Sum.pdf", L"C:\\A\\ECE190-W*-Slides.pdf" ),
            "a summary does not match the slides pattern" );
-    check( matches_pattern( L"C:\A\X1.pdf", L"C:\A\X?.pdf" ), "? matches one character" );
-    check( !matches_pattern( L"C:\A\X12.pdf", L"C:\A\X?.pdf" ), "? does not match two characters" );
-    check( matches_pattern( L"C:\A\L.pdf", L"C:\A\L*.pdf" ), "* may match nothing" );
+    check( matches_pattern( L"C:\\A\\X1.pdf", L"C:\\A\\X?.pdf" ), "? matches one character" );
+    check( !matches_pattern( L"C:\\A\\X12.pdf", L"C:\\A\\X?.pdf" ), "? does not match two characters" );
+    check( matches_pattern( L"C:\\A\\L.pdf", L"C:\\A\\L*.pdf" ), "* may match nothing" );
 }
