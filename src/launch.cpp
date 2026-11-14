@@ -117,11 +117,7 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
     return plan;
 }
 
-vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate ) {
-    vector<wstring> problems;
-    vector<planned_window> plan = plan_setup( chosen, picks, separate, problems );
-    if ( plan.empty() ) return problems;
-
+vector<opened_window> open_plan( const setup &chosen, const vector<planned_window> &plan, vector<wstring> &problems ) {
     vector<wstring> notes_paths;
     for ( const planned_window &window : plan ) {
         if ( window.app != program::notepad_pp ) continue;
@@ -137,8 +133,12 @@ vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &
         wstring problem = switch_to_desktop( chosen.desktop );
         if ( !problem.empty() ) problems.push_back( problem );
     }
+    return open_windows_recorded( plan, problems );
+}
 
-    vector<wstring> window_problems = open_windows( plan );
-    problems.insert( problems.end(), window_problems.begin(), window_problems.end() );
+vector<wstring> open_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate ) {
+    vector<wstring> problems;
+    vector<planned_window> plan = plan_setup( chosen, picks, separate, problems );
+    if ( !plan.empty() ) open_plan( chosen, plan, problems );
     return problems;
 }

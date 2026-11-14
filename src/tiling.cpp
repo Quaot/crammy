@@ -176,9 +176,8 @@ RECT side_area( const wstring &side, const RECT &screen ) {
     return screen;
 }
 
-}  // namespace
-
-vector<wstring> open_windows( const vector<planned_window> &plan ) {
+// Starts every window, then moves each one to its part of the screen.
+vector<live_window> start_and_place( const vector<planned_window> &plan ) {
     RECT screen;
     SystemParametersInfoW( SPI_GETWORKAREA, 0, &screen, 0 );
 
@@ -202,6 +201,10 @@ vector<wstring> open_windows( const vector<planned_window> &plan ) {
     for ( live_window &window : windows ) {
         if ( window.plan.app == program::pdfcraft ) {
             wstring command = quoted( pdfcraft_exe ) + L" --new-window";
+            if ( !window.plan.control_file.empty() ) {
+                CreateDirectoryW( parent_folder( window.plan.control_file ).c_str(), nullptr );
+                command += L" --control " + quoted( window.plan.control_file );
+            }
             for ( const wstring &path : window.plan.paths ) command += L" " + quoted( path );
             window.process_id = start_process( command );
         } else if ( window.plan.app == program::acrobat ) {
@@ -249,12 +252,29 @@ vector<wstring> open_windows( const vector<planned_window> &plan ) {
         }
     }
 
-    vector<wstring> problems;
-    for ( const live_window &window : windows ) {
-        if ( !window.hwnd ) problems.push_back( L"No window appeared for " + file_name( window.plan.paths[0] ) );
-    }
     for ( const live_window &window : windows ) {
         if ( window.hwnd && window.plan.app == program::notepad_pp ) bring_to_front( window.hwnd );
     }
+    return windows;
+}
+
+}  // namespace
+
+vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems ) {
+    vector<opened_window> opened;
+    for ( const live_window &window : start_and_place( plan ) ) {
+        if ( !window.hwnd ) {
+            problems.push_back( L"No window appeared for " + file_name( window.plan.paths[0] ) );
+            continue;
+        }
+        for ( const wstring &path : window.plan.paths )
+            opened.push_back( { window.hwnd, path, window.plan.app, window.plan.side } );
+    }
+    return opened;
+}
+
+vector<wstring> open_windows( const vector<planned_window> &plan ) {
+    vector<wstring> problems;
+    open_windows_recorded( plan, problems );
     return problems;
 }
