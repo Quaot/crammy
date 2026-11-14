@@ -17,4 +17,14 @@ void show_setups();
 int panel_height( const today_section &today, const vector<desktop_tile> &tiles, UINT dpi );
 
 void draw_panel( HDC dc, int width, int height, const today_section &today, const vector<desktop_tile> &tiles,
-                 const wstring &date_text, const wstring &time_text, UINT dpi );
+                 const wstring &date_text, UINT dpi );
+
+// Opens the panel with a problem written under it.
+void show_panel_problem( const wstring &problem );
+
+// The courses in the timetable that have a folder in Downloads.
+vector<wstring> known_courses( const vector<class_block> &blocks );
+
+// Creates the class's desktop when the click says so, then switches to it. Returns false when the
+// switch failed; problem says what went wrong.
+bool go_to_class_desktop( const class_click &click, wstring &problem );

@@ -15,6 +15,10 @@ bool needs_ticks( const setup &chosen, const layout_item &item );
 vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
                                    vector<wstring> &problems );
 
+// Creates the notes files, closes old notes tabs, switches to the setup's desktop and opens the plan.
+// Returns which window shows which file; problems gets what went wrong.
+vector<opened_window> open_plan( const setup &chosen, const vector<planned_window> &plan, vector<wstring> &problems );
+
 // picks[i] holds the PDFs ticked for setup item i (only pick items use it).
 // separate puts each picked PDF in its own PdfCraft window.
 // Returns problems to show the user; empty when everything opened.

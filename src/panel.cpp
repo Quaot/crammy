@@ -6,6 +6,7 @@
 
 #include "dialogs.h"
 #include "launch.h"
+#include "next_runner.h"
 #include "profiles.h"
 #include "settings.h"
 #include "subjects.h"
@@ -34,7 +35,7 @@ const int max_icons = 3;
 const int link_height = 20;
 const int link_gap = 10;
 
-enum class link { long_pomodoro, short_pomodoro, setups, none };
+enum class link { long_pomodoro, short_pomodoro, setups, next_deck, none };
 const wchar_t *link_labels[] = { L"Pomodoro 3h", L"1.5h", L"Setups\x2026" };
 
 HFONT panel_font( UINT dpi, const wchar_t *face, int points, int weight = FW_NORMAL, bool underline = false ) {
@@ -74,16 +75,24 @@ struct panel_layout {
     int rule_after_today;
     vector<RECT> chips;
     int rule_after_chips;
-    RECT links[3];
+    RECT links[4];      // the last is the next deck link, empty when there is none
     int height;
 };
 
-panel_layout lay_out_panel( const today_section &today, const vector<desktop_tile> &tiles, int width, UINT dpi ) {
+panel_layout lay_out_panel( const today_section &today, const vector<desktop_tile> &tiles, const wstring &deck_link,
+                           int width, UINT dpi ) {
     auto px = [dpi]( int value ) { return scaled( value, dpi ); };
     panel_layout layout{};
     int left = px( margin ), right = width - px( margin );
 
     layout.header = { left, px( 6 ), right, px( 6 ) + px( header_height ) };
+    panel_fonts fonts( dpi );
+    HDC screen = GetDC( nullptr );
+    // The next deck link takes the right end of the date line
+    if ( !deck_link.empty() ) {
+        int deck_width = text_width( screen, fonts.text, deck_link );
+        layout.links[3] = { right - deck_width, layout.header.top, right, layout.header.bottom };
+    }
     int y = layout.header.bottom + px( 4 );
     for ( size_t i = 0; i < today.rows.size(); ++i ) {
         layout.rows.push_back( { 0, y, width, y + px( row_height ) } );
@@ -109,8 +118,6 @@ panel_layout lay_out_panel( const today_section &today, const vector<desktop_til
     layout.rule_after_chips = y + px( 7 );
     y = layout.rule_after_chips + px( 4 );
 
-    panel_fonts fonts( dpi );
-    HDC screen = GetDC( nullptr );
     int x = left;
     for ( int i = 0; i < 2; ++i ) {
         int link_width = text_width( screen, fonts.text, link_labels[i] );
@@ -209,8 +216,8 @@ void draw_chip( HDC dc, const desktop_tile &tile, const RECT &box, const panel_f
 }
 
 void draw_contents( HDC dc, int width, int height, const today_section &today, const vector<desktop_tile> &tiles,
-                    const wstring &date_text, const wstring &time_text, UINT dpi, link hovered ) {
-    panel_layout layout = lay_out_panel( today, tiles, width, dpi );
+                    const wstring &date_text, const wstring &deck_link, UINT dpi, link hovered ) {
+    panel_layout layout = lay_out_panel( today, tiles, deck_link, width, dpi );
     panel_fonts fonts( dpi );
     HGDIOBJ old_font = GetCurrentObject( dc, OBJ_FONT );
 
@@ -218,7 +225,9 @@ void draw_contents( HDC dc, int width, int height, const today_section &today, c
     SetBkMode( dc, TRANSPARENT );
 
     write( dc, date_text, layout.header, fonts.date, ink, DT_SINGLELINE | DT_VCENTER | DT_LEFT );
-    write( dc, time_text, layout.header, fonts.date, ink, DT_SINGLELINE | DT_VCENTER | DT_RIGHT );
+    if ( !deck_link.empty() )
+        write( dc, deck_link, layout.links[3], link::next_deck == hovered ? fonts.hovered : fonts.text, red,
+               DT_SINGLELINE | DT_VCENTER );
 
     for ( size_t i = 0; i < today.rows.size(); ++i ) draw_row( dc, today.rows[i], layout.rows[i], width, fonts, dpi );
     if ( !today.message.empty() )
@@ -246,7 +255,7 @@ struct panel_state {
     vector<desktop_tile> tiles;
     vector<wstring> names;
     crammy_settings settings;
-    wstring date, time, problem;
+    wstring date, deck_link, problem;
     link hovered = link::none;
     ULONGLONG closed_at = 0;
 };
@@ -256,6 +265,8 @@ panel_state panel;
 const wchar_t *day_names[] = { L"Sun", L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat" };
 const wchar_t *month_names[] = { L"Jan", L"Feb", L"Mar", L"Apr", L"May", L"Jun",
                                  L"Jul", L"Aug", L"Sep", L"Oct", L"Nov", L"Dec" };
+
+}  // namespace
 
 vector<wstring> known_courses( const vector<class_block> &blocks ) {
     wstring downloads = join_path( user_folder(), L"Downloads" );
@@ -270,13 +281,15 @@ vector<wstring> known_courses( const vector<class_block> &blocks ) {
     return known;
 }
 
+namespace {
+
 void read_panel_data() {
     SYSTEMTIME now;
     GetLocalTime( &now );
     panel.date = wstring( day_names[now.wDayOfWeek] ) + L" " + month_names[now.wMonth - 1] + L" " +
                  std::to_wstring( now.wDay );
     int minute_now = now.wHour * 60 + now.wMinute;
-    panel.time = clock_text( minute_now );
+    panel.deck_link = next_deck_label();
 
     vector<wstring> errors;
     wstring timetable = timetable_path();
@@ -318,7 +331,7 @@ void paint( HWND window ) {
 
     fill( dc, client, cream );
     int top = panel_height( panel.today, panel.tiles, panel.dpi );
-    draw_contents( dc, client.right, top, panel.today, panel.tiles, panel.date, panel.time, panel.dpi, panel.hovered );
+    draw_contents( dc, client.right, top, panel.today, panel.tiles, panel.date, panel.deck_link, panel.dpi, panel.hovered );
     if ( !panel.problem.empty() ) {
         panel_fonts fonts( panel.dpi );
         HGDIOBJ old_font = GetCurrentObject( dc, OBJ_FONT );
@@ -350,21 +363,9 @@ void open_class( const today_row &row ) {
     class_click click = plan_class_click( row.meeting, panel.names, panel.tiles, titles );
     close_panel();
 
-    wstring problem, target = click.desktop;
-    if ( click.create_desktop ) {
-        size_t count_before = desktop_names().size();
-        create_desktop( click.desktop, problem );
-        // The registry can lag behind the new desktop, so wait for it as switch_to_desktop does
-        vector<wstring> fresh = desktop_names();
-        for ( int wait = 0; wait < 40 && fresh.size() <= count_before; ++wait ) {
-            Sleep( 50 );
-            fresh = desktop_names();
-        }
-        if ( !problem.empty() && !fresh.empty() ) target = fresh.back();
-    }
-    wstring switch_problem = switch_to_desktop( target );
-    if ( !switch_problem.empty() ) {
-        open_panel( problem.empty() ? switch_problem : problem + L" " + switch_problem );
+    wstring problem;
+    if ( !go_to_class_desktop( click, problem ) ) {
+        open_panel( problem );
         return;
     }
 
@@ -395,11 +396,11 @@ void start_pomodoro( bool long_video ) {
 panel_layout current_layout() {
     RECT client;
     GetClientRect( panel.window, &client );
-    return lay_out_panel( panel.today, panel.tiles, client.right, panel.dpi );
+    return lay_out_panel( panel.today, panel.tiles, panel.deck_link, client.right, panel.dpi );
 }
 
 link link_at( const panel_layout &layout, POINT point ) {
-    for ( int i = 0; i < 3; ++i )
+    for ( int i = 0; i < 4; ++i )
         if ( PtInRect( &layout.links[i], point ) ) return link( i );
     return link::none;
 }
@@ -426,6 +427,9 @@ void click( POINT point ) {
     else if ( chosen == link::setups ) {
         close_panel();
         show_setups();
+    } else if ( chosen == link::next_deck ) {
+        close_panel();
+        run_next_deck();
     }
 }
 
@@ -529,12 +533,35 @@ void open_panel( const wstring &problem ) {
 }  // namespace
 
 int panel_height( const today_section &today, const vector<desktop_tile> &tiles, UINT dpi ) {
-    return lay_out_panel( today, tiles, scaled( panel_width, dpi ), dpi ).height;
+    return lay_out_panel( today, tiles, L"", scaled( panel_width, dpi ), dpi ).height;
 }
 
 void draw_panel( HDC dc, int width, int height, const today_section &today, const vector<desktop_tile> &tiles,
-                 const wstring &date_text, const wstring &time_text, UINT dpi ) {
-    draw_contents( dc, width, height, today, tiles, date_text, time_text, dpi, link::none );
+                 const wstring &date_text, UINT dpi ) {
+    draw_contents( dc, width, height, today, tiles, date_text, L"", dpi, link::none );
+}
+
+bool go_to_class_desktop( const class_click &click, wstring &problem ) {
+    wstring target = click.desktop;
+    if ( click.create_desktop ) {
+        size_t count_before = desktop_names().size();
+        create_desktop( click.desktop, problem );
+        // The registry can lag behind the new desktop, so wait for it as switch_to_desktop does
+        vector<wstring> fresh = desktop_names();
+        for ( int wait = 0; wait < 40 && fresh.size() <= count_before; ++wait ) {
+            Sleep( 50 );
+            fresh = desktop_names();
+        }
+        if ( !problem.empty() && !fresh.empty() ) target = fresh.back();
+    }
+    wstring switch_problem = switch_to_desktop( target );
+    if ( switch_problem.empty() ) return true;
+    problem = problem.empty() ? switch_problem : problem + L" " + switch_problem;
+    return false;
+}
+
+void show_panel_problem( const wstring &problem ) {
+    open_panel( problem );
 }
 
 void show_setups() {
