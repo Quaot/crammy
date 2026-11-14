@@ -24,3 +24,23 @@ wstring deck_label( const wstring &file_name );
 std::map<wstring, wstring> read_places( const wstring &text );
 wstring write_places( const std::map<wstring, wstring> &places );
 wstring places_path();      // places.txt next to crammy.exe
+
+// The decks opened for one setup on one day
+struct decks_on_day {
+    wstring date;               // "2026-11-16"
+    vector<wstring> files;      // deck file names in the order they were opened, no repeats
+};
+
+// One record per line: the setup title, " = ", the date, " | ", then the file names separated by " ; ".
+std::map<wstring, decks_on_day> read_decks_today( const wstring &text );
+wstring write_decks_today( const std::map<wstring, decks_on_day> &records );
+wstring decks_today_path();     // "decks today.txt" next to crammy.exe
+
+// The decks to open for a setup: the ones already opened today when there are any,
+// otherwise the deck after the place (one deck), otherwise none.
+vector<wstring> decks_to_open( const vector<wstring> &ordered, const wstring &place,
+                               const decks_on_day &record, const wstring &today );
+
+// The record after opening files today: on the same day the new files are added at the end,
+// leaving out ones already there; on another day (or an empty record) it starts again.
+decks_on_day after_opening( const decks_on_day &record, const wstring &today, const vector<wstring> &files );

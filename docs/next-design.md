@@ -100,6 +100,7 @@ A builder read this design and asked about the cases below. These are my calls; 
 - **A long line.** The line is cut to 48 characters, with `…` at the end when it is cut.
 - **Next deck in the panel only.** The next deck link is in the panel, and the taskbar line shows the name of the deck reached. A next deck button on the taskbar would be a later change.
 - **The next-deck fallback.** If PdfCraft cannot add a tab, the window is reopened with the decks opened for this class today, in order. The page he was on is lost in that case.
+- **A second open on the same day.** Every way of opening a `sequence` setup (the Setups window, a class click, `--setup` and Next) reads and writes the decks opened today in `decks today.txt`, next to `places.txt`. A second open on the same day shows the same decks again, and only next deck moves on.
 
 ## Left to the builder
 

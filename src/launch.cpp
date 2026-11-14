@@ -21,17 +21,23 @@ vector<pdf_file> pick_files( const layout_item &item ) {
     return decks;
 }
 
-// The place saved for this setup, or "" when there is none
-static wstring saved_place( const setup &chosen ) {
+wstring saved_place( const wstring &title ) {
     if ( !is_file( places_path() ) ) return L"";
     std::map<wstring, wstring> places = read_places( read_text_file( places_path() ) );
-    auto found = places.find( chosen.title );
+    auto found = places.find( title );
     return found == places.end() ? L"" : found->second;
+}
+
+decks_on_day saved_decks_today( const wstring &title ) {
+    if ( !is_file( decks_today_path() ) ) return {};
+    std::map<wstring, decks_on_day> records = read_decks_today( read_text_file( decks_today_path() ) );
+    auto found = records.find( title );
+    return found == records.end() ? decks_on_day() : found->second;
 }
 
 bool needs_ticks( const setup &chosen, const layout_item &item ) {
     if ( item.kind == item_kind::pick ) return true;
-    return item.kind == item_kind::sequence && saved_place( chosen ).empty();
+    return item.kind == item_kind::sequence && saved_place( chosen.title ).empty();
 }
 
 vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
@@ -70,13 +76,15 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
                 pdfs = picks[i];
                 break;
             }
-            wstring place = saved_place( chosen );
+            // Otherwise the decks opened today open again, or the deck after the place
+            wstring place = saved_place( chosen.title );
             if ( place.empty() ) break;
             vector<pdf_file> decks = pick_files( item );
             vector<wstring> names;
             for ( const pdf_file &deck : decks ) names.push_back( deck.name );
-            wstring next = deck_after( names, place );
-            for ( const pdf_file &deck : decks ) if ( deck.name == next ) pdfs = { deck.path };
+            for ( const wstring &name : decks_to_open( names, place, saved_decks_today( chosen.title ), today_text() ) ) {
+                for ( const pdf_file &deck : decks ) if ( deck.name == name ) pdfs.push_back( deck.path );
+            }
             if ( pdfs.empty() ) problems.push_back( L"No numbered lecture decks found in " + item.paths[0] );
             break;
         }
@@ -161,29 +169,51 @@ static unsigned long long file_size( const wstring &path ) {
     return ( static_cast<unsigned long long>( data.nFileSizeHigh ) << 32 ) | data.nFileSizeLow;
 }
 
-// Writes a new copy and then moves it over places.txt, so a failed write never leaves half a file.
-// A places.txt that exists but cannot be read is left alone, since rewriting it would lose its places.
-bool save_place( const wstring &title, const wstring &deck_name ) {
-    wstring path = places_path();
-    std::map<wstring, wstring> places;
-    if ( is_file( path ) ) {
-        wstring text = read_text_file( path );
-        if ( text.empty() && file_size( path ) > 0 ) return false;
-        places = read_places( text );
-    }
-    places[title] = deck_name;
+// Reads a file that is about to be rewritten. False when it exists but cannot be read,
+// since rewriting it would lose what it holds. A file that does not exist reads as "".
+static bool read_to_rewrite( const wstring &path, wstring &text ) {
+    text.clear();
+    if ( !is_file( path ) ) return true;
+    text = read_text_file( path );
+    return !( text.empty() && file_size( path ) > 0 );
+}
+
+// Writes a new copy and then moves it over the file, so a failed write never leaves half a file
+static bool rewrite_file( const wstring &path, const wstring &text ) {
     wstring temporary = path + L".tmp";
-    return write_text_file( temporary, write_places( places ) ) &&
+    return write_text_file( temporary, text ) &&
            MoveFileExW( temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING );
 }
 
+bool save_place( const wstring &title, const wstring &deck_name ) {
+    wstring path = places_path(), text;
+    if ( !read_to_rewrite( path, text ) ) return false;
+    std::map<wstring, wstring> places = read_places( text );
+    places[title] = deck_name;
+    return rewrite_file( path, write_places( places ) );
+}
+
 const wchar_t *place_problem = L"Could not save the place in places.txt.";
+
+bool save_decks_today( const wstring &title, const vector<wstring> &deck_names ) {
+    wstring path = decks_today_path(), text;
+    if ( !read_to_rewrite( path, text ) ) return false;
+    std::map<wstring, decks_on_day> records = read_decks_today( text );
+    records[title] = after_opening( records[title], today_text(), deck_names );
+    return rewrite_file( path, write_decks_today( records ) );
+}
+
+const wchar_t *decks_today_problem = L"Could not save today's decks in decks today.txt.";
 
 wstring save_places( const setup &chosen, const vector<opened_window> &opened ) {
     for ( const layout_item &item : chosen.items ) {
         if ( item.kind != item_kind::sequence ) continue;
         vector<wstring> shown = decks_shown( item, opened );
-        if ( !shown.empty() && !save_place( chosen.title, file_name( shown.back() ) ) ) return place_problem;
+        if ( shown.empty() ) continue;
+        vector<wstring> names;
+        for ( const wstring &path : shown ) names.push_back( file_name( path ) );
+        if ( !save_decks_today( chosen.title, names ) ) return decks_today_problem;
+        if ( !save_place( chosen.title, names.back() ) ) return place_problem;
     }
     return L"";
 }

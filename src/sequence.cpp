@@ -113,3 +113,81 @@ wstring places_path() {
     GetModuleFileNameW( nullptr, exe_path, MAX_PATH );
     return join_path( parent_folder( exe_path ), L"places.txt" );
 }
+
+// The pieces of text between each separator, trimmed; empty pieces are left out
+static vector<wstring> split_trimmed( const wstring &text, const wstring &separator ) {
+    vector<wstring> pieces;
+    size_t start = 0;
+    while ( start <= text.size() ) {
+        size_t end = text.find( separator, start );
+        wstring piece = trim( text.substr( start, end == wstring::npos ? wstring::npos : end - start ) );
+        if ( !piece.empty() ) pieces.push_back( piece );
+        if ( end == wstring::npos ) break;
+        start = end + separator.size();
+    }
+    return pieces;
+}
+
+std::map<wstring, decks_on_day> read_decks_today( const wstring &text ) {
+    std::map<wstring, decks_on_day> records;
+    for ( const wstring &line : split_trimmed( text, L"\n" ) ) {
+        size_t equals = line.find( L'=' );
+        if ( equals == wstring::npos ) continue;
+        wstring rest = line.substr( equals + 1 );
+        size_t bar = rest.find( L" | " );
+        if ( bar == wstring::npos ) continue;
+
+        wstring title = trim( line.substr( 0, equals ) );
+        decks_on_day record;
+        record.date = trim( rest.substr( 0, bar ) );
+        record.files = split_trimmed( rest.substr( bar + 3 ), L" ; " );
+        if ( !title.empty() ) records[title] = record;
+    }
+    return records;
+}
+
+wstring write_decks_today( const std::map<wstring, decks_on_day> &records ) {
+    wstring text;
+    for ( const auto &[title, record] : records ) {
+        text += title + L" = " + record.date + L" |";
+        for ( size_t i = 0; i < record.files.size(); ++i ) text += ( i == 0 ? L" " : L" ; " ) + record.files[i];
+        text += L"\r\n";
+    }
+    return text;
+}
+
+wstring decks_today_path() {
+    wchar_t exe_path[MAX_PATH];
+    GetModuleFileNameW( nullptr, exe_path, MAX_PATH );
+    return join_path( parent_folder( exe_path ), L"decks today.txt" );
+}
+
+// The name in names that is file, whatever its case, or "" when there is none
+static wstring same_name_in( const vector<wstring> &names, const wstring &file ) {
+    for ( const wstring &name : names )
+        if ( lower( name ) == lower( file ) ) return name;
+    return L"";
+}
+
+vector<wstring> decks_to_open( const vector<wstring> &ordered, const wstring &place,
+                               const decks_on_day &record, const wstring &today ) {
+    vector<wstring> decks;
+    if ( record.date == today ) {
+        for ( const wstring &file : record.files ) {
+            wstring name = same_name_in( ordered, file );
+            if ( !name.empty() ) decks.push_back( name );
+        }
+    }
+    if ( decks.empty() && !place.empty() && !ordered.empty() ) decks = { deck_after( ordered, place ) };
+    return decks;
+}
+
+decks_on_day after_opening( const decks_on_day &record, const wstring &today, const vector<wstring> &files ) {
+    if ( files.empty() ) return record;
+    decks_on_day after;
+    after.date = today;
+    if ( record.date == today ) after.files = record.files;
+    for ( const wstring &file : files )
+        if ( same_name_in( after.files, file ).empty() ) after.files.push_back( file );
+    return after;
+}
