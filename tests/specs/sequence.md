@@ -122,3 +122,11 @@ gives a map of two entries: `ECE 150: Lecture` → `3.02 Linear search.pdf`, and
   gives no errors, and the setup's one item has kind `item_kind::sequence`, side `full` and the single path `1 Lectures\PDFs`. `write_book` of that book contains the line `full = sequence "1 Lectures\PDFs"`, and reading that text again gives the same item.
 - A `sequence` line with two paths, `full = sequence "a" "b"`, gives an error that starts with `line ` and the line's number.
 - A `sequence` line with no path gives an error in the same form.
+
+## Also settled
+
+- `read_places` accepts lines ending in `\n` as well as `\r\n`.
+- Empty input gives empty results: `deck_order` of no names, `read_places` of empty text, and `write_places` of an empty map (`""`).
+- A number part comes before a letter-only part whatever the letter's case, so `1.18` comes before `1.a`.
+- A place that sorts after every name gives the last name.
+- Line numbers in profile errors start at 1.

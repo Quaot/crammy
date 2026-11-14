@@ -2,7 +2,7 @@
 
 #include "text.h"
 
-enum class item_kind { notes, pdf, tabs, pick, folder, newest };
+enum class item_kind { notes, pdf, tabs, pick, folder, newest, sequence };
 enum class viewer { pdfcraft, acrobat };
 
 // One window line as written in profiles.txt. Paths stay as written.

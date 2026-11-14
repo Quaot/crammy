@@ -201,7 +201,7 @@ void open_current() {
 
     pick_answer picks;
     for ( const layout_item &item : chosen.items ) {
-        if ( item.kind == item_kind::pick ) {
+        if ( needs_ticks( chosen, item ) ) {
             picks = ask_for_picks( ui.window, chosen );
             if ( !picks.accepted ) return;
             break;

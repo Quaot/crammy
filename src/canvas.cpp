@@ -133,6 +133,10 @@ void describe( tile &each, const written_item &item ) {
         each.caption = L"From ";
         for ( size_t i = 0; i < count; ++i ) each.caption += ( i ? L", " : L"" ) + folder_label( item.paths[i] );
         break;
+    case item_kind::sequence:
+        each.opens = L"The next numbered deck";
+        each.caption = L"In order, from " + folder_label( item.paths[0] );
+        break;
     }
 }
 

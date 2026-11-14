@@ -55,16 +55,16 @@ void say_all( const vector<wstring> &lines ) {
 }
 
 bool has_pick( const setup &chosen ) {
-    for ( const layout_item &item : chosen.items ) if ( item.kind == item_kind::pick ) return true;
+    for ( const layout_item &item : chosen.items ) if ( needs_ticks( chosen, item ) ) return true;
     return false;
 }
 
 int list_pdfs( const setup &chosen ) {
     vector<wstring> lines;
     for ( const layout_item &item : chosen.items ) {
-        if ( item.kind != item_kind::pick ) continue;
+        if ( !needs_ticks( chosen, item ) ) continue;
         lines.push_back( L"[" + item.side + L"]" );
-        for ( const pdf_file &pdf : find_pdfs( item.paths, true ) ) {
+        for ( const pdf_file &pdf : pick_files( item ) ) {
             lines.push_back( date_text( pdf.modified ) + L"  " + pdf.folder + L"\\" + pdf.name );
         }
     }
@@ -77,8 +77,8 @@ int list_pdfs( const setup &chosen ) {
 bool find_pick( const setup &chosen, const wstring &text, size_t &item_index, wstring &path ) {
     for ( bool exact : { true, false } ) {
         for ( size_t i = 0; i < chosen.items.size(); ++i ) {
-            if ( chosen.items[i].kind != item_kind::pick ) continue;
-            for ( const pdf_file &pdf : find_pdfs( chosen.items[i].paths, true ) ) {
+            if ( !needs_ticks( chosen, chosen.items[i] ) ) continue;
+            for ( const pdf_file &pdf : pick_files( chosen.items[i] ) ) {
                 bool matches = exact ? lower( stem( pdf.name ) ) == lower( text ) : contains_ci( pdf.name, text );
                 if ( matches ) {
                     item_index = i;

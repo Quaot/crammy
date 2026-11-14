@@ -62,6 +62,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/dialogs.cpp` | The New setup / Rename dialog and the tick list shown before opening; the tick list is the only place answer keys are hidden |
 | `src/editor_window.cpp` | Edit as text: a plain editor for `profiles.txt` |
 | `src/profiles.cpp` | Reading and writing `profiles.txt`; joining paths to the root |
+| `src/sequence.cpp` | Putting numbered lecture decks in section order, finding the deck after a place, and reading and writing `places.txt` |
 | `src/files.cpp` | Finding PDFs, spotting answer keys, the `newest` pattern, naming notes files |
 | `src/launch.cpp` | Turning a setup into windows to open |
 | `src/tiling.cpp` | Starting programs, finding their windows, moving and snapping them; small helpers shared with other files |
@@ -102,7 +103,7 @@ right = newest "1 Lectures\PDF\ECE190-W*-Sum.pdf" with acrobat
 - `[Subject]` starts a subject; `[Subject: Setup]` adds a setup to it. A subject with no setups opens as it is and is listed under its own name.
 - Subject settings: `root` (relative to the user folder), `desktop` (a virtual desktop name), `notes folder` (relative to the root; the default is `2 Practice` when it exists, else the root). A setup may set its own `notes folder` or `desktop`.
 - Window lines are `side = kind "path" "path" ...`. `side` is `left`, `right` or `full`. Lines under a subject heading are shared by all its setups.
-- Kinds: `notes` (Notepad++; no path means a file named after the first PDF), `pdf` (one file), `newest` (one pattern, newest file by modified date), `tabs` (several PDFs in one PdfCraft window), `pick` (folders or files to tick from), `folder` (File Explorer).
+- Kinds: `notes` (Notepad++; no path means a file named after the first PDF), `pdf` (one file), `newest` (one pattern, newest file by modified date), `tabs` (several PDFs in one PdfCraft window), `pick` (folders or files to tick from), `sequence` (the numbered decks of one folder in section order; opens the one after the place saved in `places.txt`, or shows the tick list when there is no place), `folder` (File Explorer).
 - A PDF line may end with `with acrobat`. Acrobat gets one window per PDF.
 - Paths are stored relative to the root when they are inside it. `*` works in file names. `%USERPROFILE%` and other variables are expanded.
 

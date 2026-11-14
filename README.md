@@ -69,6 +69,7 @@ A side is `left` or `right`, or `full` for the whole screen. When several window
 | `newest "L*.pdf"` | the newest PDF whose name fits the pattern |
 | `tabs "a.pdf" "b.pdf"` | one PdfCraft window with a tab for each PDF |
 | `pick "folder" "file"` | the PDFs you tick at launch |
+| `sequence "folder"` | one PdfCraft window with the next numbered lecture deck after the one last opened; before any was opened, the decks to tick |
 | `folder "folder"` | File Explorer |
 
 Ending a PDF line with `with acrobat` opens it in Adobe Acrobat in place of PdfCraft. Paths start from the root unless they are absolute. `*` matches any text in a file name, and variables such as `%USERPROFILE%` are expanded. Answer files go in `2 Practice` when the course has one. Set `notes folder = ...` to change that.

@@ -373,7 +373,7 @@ void open_class( const today_row &row ) {
         setup chosen = *found;
         pick_answer picks;
         bool asked = false;
-        for ( const layout_item &item : chosen.items ) asked = asked || item.kind == item_kind::pick;
+        for ( const layout_item &item : chosen.items ) asked = asked || needs_ticks( chosen, item );
         if ( asked ) picks = ask_for_picks( nullptr, chosen );
         if ( !asked || picks.accepted ) {
             vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate );

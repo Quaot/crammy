@@ -6,6 +6,7 @@
 #include <set>
 
 #include "files.h"
+#include "launch.h"
 #include "ui.h"
 
 namespace {
@@ -298,8 +299,8 @@ pick_answer ask_for_picks( HWND owner, const setup &chosen ) {
     }
 
     for ( size_t i = 0; i < chosen.items.size(); ++i ) {
-        if ( chosen.items[i].kind != item_kind::pick ) continue;
-        for ( const pdf_file &pdf : find_pdfs( chosen.items[i].paths, true ) ) picker.rows.push_back( { i, pdf } );
+        if ( !needs_ticks( chosen, chosen.items[i] ) ) continue;
+        for ( const pdf_file &pdf : pick_files( chosen.items[i] ) ) picker.rows.push_back( { i, pdf } );
     }
     show_rows();
     if ( !picker.shown.empty() ) ListView_SetItemState( picker.list, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED );
