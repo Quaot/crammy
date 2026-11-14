@@ -119,7 +119,9 @@ void refresh_line( Controls::TextBlock text, Controls::Button next ) {
             can_next = false;
         }
         if ( line.empty() ) {
+            // The window may have closed after FindWindowW found it.
             line = L"Crammy";
+            can_next = false;
         }
     }
     if ( text.Text() != line ) {
@@ -165,6 +167,16 @@ Controls::Button make_button( Controls::TextBlock text ) {
 }
 
 void add_line( Controls::Grid root_grid ) {
+    // The taskbar can drop its tree, for example when a monitor goes away.
+    std::erase_if( g_lines, []( placed_line &placed ) {
+        if ( placed.panel.get() ) {
+            return false;
+        }
+        if ( placed.timer ) {
+            placed.timer.Stop();
+        }
+        return true;
+    } );
     for ( auto child : root_grid.Children() ) {
         auto element = child.try_as<FrameworkElement>();
         if ( element && element.Name() == line_name ) {
@@ -199,8 +211,20 @@ void add_line( Controls::Grid root_grid ) {
 
     placed_line placed;
     placed.panel = winrt::make_weak( panel );
-    placed.text_click = text_button.Click( winrt::auto_revoke, []( auto &&, auto && ) { show_panel(); } );
-    placed.next_click = next_button.Click( winrt::auto_revoke, []( auto &&, auto && ) { press_next(); } );
+    placed.text_click = text_button.Click( winrt::auto_revoke, []( auto &&, auto && ) {
+        try {
+            show_panel();
+        } catch ( ... ) {
+            Wh_Log( L"Opening the panel failed" );
+        }
+    } );
+    placed.next_click = next_button.Click( winrt::auto_revoke, []( auto &&, auto && ) {
+        try {
+            press_next();
+        } catch ( ... ) {
+            Wh_Log( L"Sending Next failed" );
+        }
+    } );
     // The timer runs on the taskbar's thread, so its ticks may touch the XAML.
     placed.timer = DispatcherTimer();
     placed.timer.Interval( std::chrono::seconds( 2 ) );
@@ -214,14 +238,17 @@ void add_line( Controls::Grid root_grid ) {
                 }
                 return;
             }
-            refresh_line( text, next );
+            try {
+                refresh_line( text, next );
+            } catch ( ... ) {
+                Wh_Log( L"Refreshing the line failed" );
+            }
         } );
     placed.timer.Start();
     g_lines.push_back( std::move( placed ) );
 }
 
-// Returns false when the Widgets button is not in the taskbar's tree yet.
-bool replace_widgets( FrameworkElement widgets ) {
+bool replace_widgets_unguarded( FrameworkElement widgets ) {
     auto frame = find_parent_by_class( widgets, L"Taskbar.TaskbarFrame" );
     auto root_grid = frame ? find_child( frame, L"RootGrid", false ).try_as<Controls::Grid>() : nullptr;
     if ( !root_grid ) {
@@ -240,6 +267,17 @@ bool replace_widgets( FrameworkElement widgets ) {
     }
     add_line( root_grid );
     return true;
+}
+
+// Returns false when the Widgets button is not in the taskbar's tree yet.
+// This runs inside the taskbar's own code, so no WinRT error may leave it.
+bool replace_widgets( FrameworkElement widgets ) {
+    try {
+        return replace_widgets_unguarded( widgets );
+    } catch ( ... ) {
+        Wh_Log( L"Placing the line failed" );
+        return true;
+    }
 }
 
 void restore_all() {
@@ -360,7 +398,7 @@ HWND find_taskbar_window() {
 }
 
 // XAML objects may only be touched from the taskbar's own thread.
-void run_on_taskbar_thread( void ( *proc )( HWND ) ) {
+bool run_on_taskbar_thread( void ( *proc )( HWND ) ) {
     static const UINT run_message = RegisterWindowMessageW( L"Windhawk_RunFromWindowThread_" WH_MOD_ID );
     struct run_request {
         void ( *proc )( HWND );
@@ -368,7 +406,7 @@ void run_on_taskbar_thread( void ( *proc )( HWND ) ) {
     };
     HWND window = find_taskbar_window();
     if ( !window ) {
-        return;
+        return false;
     }
     DWORD thread_id = GetWindowThreadProcessId( window, nullptr );
     HHOOK hook = SetWindowsHookExW( WH_CALLWNDPROC, []( int code, WPARAM wparam, LPARAM lparam ) -> LRESULT {
@@ -380,21 +418,31 @@ void run_on_taskbar_thread( void ( *proc )( HWND ) ) {
         return CallNextHookEx( nullptr, code, wparam, lparam );
     }, nullptr, thread_id );
     if ( !hook ) {
-        return;
+        return false;
     }
     run_request request{ proc, window };
     SendMessageW( window, run_message, 0, (LPARAM)&request );
     UnhookWindowsHookEx( hook );
+    return true;
 }
 
+// These run inside a message sent to the taskbar, so no WinRT error may leave them.
 void apply_on_taskbar( HWND window ) {
-    if ( auto xaml_root = taskbar_xaml_root( window ) ) {
-        apply_all( xaml_root );
+    try {
+        if ( auto xaml_root = taskbar_xaml_root( window ) ) {
+            apply_all( xaml_root );
+        }
+    } catch ( ... ) {
+        Wh_Log( L"Placing the line failed" );
     }
 }
 
 void restore_on_taskbar( HWND ) {
-    restore_all();
+    try {
+        restore_all();
+    } catch ( ... ) {
+        Wh_Log( L"Removing the line failed" );
+    }
 }
 
 void load_settings() {
@@ -471,7 +519,11 @@ void Wh_ModAfterInit() {
 
 void Wh_ModBeforeUninit() {
     g_unloading = true;
-    run_on_taskbar_thread( restore_on_taskbar );
+    // Without the taskbar thread the timers cannot be stopped here, and one
+    // that ticks after the mod is freed would crash Explorer.
+    if ( !run_on_taskbar_thread( restore_on_taskbar ) ) {
+        Wh_Log( L"Could not reach the taskbar thread to remove the line" );
+    }
 }
 
 void Wh_ModSettingsChanged() {
