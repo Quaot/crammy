@@ -43,7 +43,7 @@ Classes for courses without a folder (GENE 119, MTHEL 99) still show on the line
 ### The line
 
 - Text: course, the kind as three letters (`lec`, `tut`, `lab`, `tst`, `sem`), the room, and `now` or `in Nm` when it starts within 60 minutes, or its start time (`13:30`) otherwise. During ECE 150 lectures, once a deck is open, the deck name follows instead of the room: `ECE 150 lec · 3.02 Linear search`.
-- Crammy recomputes the line every minute and after every Next or next deck, and keeps it as the title of its hidden `CrammyBackground` window.
+- Crammy recomputes the line every 10 seconds and after every Next or next deck, and keeps it as the title of its hidden `CrammyBackground` window.
 - The mod reads that title every two seconds (my call: a timer that reads a window title is the smallest thing that can run in Explorer) and shows it in the taskbar's own font and text colour. No red, cream or engraving on the taskbar itself; the taskbar redesign decides its look.
 
 ### The mod
@@ -65,7 +65,7 @@ After Next opens a setup with `newest` lines, Crammy watches the folder of each 
 - A new item kind in `profiles.txt`: `sequence "folder"`. It lists the PDFs in the folder whose names start with a section number, `<major>.<minor>`, such as `3.01` or `7.5`, sorted by major then minor as whole numbers. Files without a section number (`Using replit.pdf`, `assignment1.pdf`) are left out.
 - `[ECE 150: Lecture]` changes from `full = pick "1 Lectures\PDFs"` to `full = sequence "1 Lectures\PDFs"`.
 - Next opens the section after the last one reached. With no saved place, it shows the tick list of the sequence, and the deck he ticks becomes the place.
-- **next deck** shows in the panel and on the line during a sequence setup's class. Each press adds the following section as a tab in the PdfCraft window Next opened, and moves the place on. At the last section it says `last deck` and does nothing.
+- **next deck** shows in the panel during a sequence setup's class, and the line shows the deck name. Each press adds the following section as a tab in the PdfCraft window Next opened, and moves the place on. At the last section it says `last deck` and does nothing.
 - Places are kept in `places.txt` next to `crammy.exe`, one line per setup: `ECE 150: Lecture = 3.02 Linear search.pdf`.
 - Whether PdfCraft can add a tab to a window that is already open is not known yet. The builder finds out from PdfCraft's command line, without the owner's screen. If it cannot, next deck closes that PdfCraft window and reopens it in the same place with all the decks of this class as tabs.
 
@@ -98,6 +98,7 @@ A builder read this design and asked about the cases below. These are my calls; 
 - **Places.** When several decks are ticked with no saved place, the place is the highest of them. If the place names a file that is gone, Crammy uses the highest deck in the order that comes before that name. After the last deck, Next opens the last deck again.
 - **Two presses.** A press of Next or next deck while the previous one is still opening windows is ignored.
 - **A long line.** The line is cut to 48 characters, with `…` at the end when it is cut.
+- **Next deck in the panel only.** The next deck link is in the panel, and the taskbar line shows the name of the deck reached. A next deck button on the taskbar would be a later change.
 - **The next-deck fallback.** If PdfCraft cannot add a tab, the window is reopened with the decks opened for this class today, in order. The page he was on is lost in that case.
 
 ## Left to the builder

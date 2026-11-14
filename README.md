@@ -23,11 +23,11 @@ crammy --check
 crammy --edit
 ```
 
-`--pick` takes the PDF with that exact name, or else the newest one whose name contains the text. `--separate` gives each picked PDF its own window.
+`--pick` takes the PDF with that exact name, or else the newest one whose name contains the text. It also works on a `sequence` line, to open a chosen deck in place of the next one. `--separate` gives each picked PDF its own window.
 
 ## The panel
 
-The panel is a window about 300 pixels wide. It opens above the bottom-left corner of the taskbar and grows upward to fit what it shows. The top line has the date, with the time at the right.
+The panel is a window about 300 pixels wide. It opens above the bottom-left corner of the taskbar and grows upward to fit what it shows. The top line has the date. During an ECE 150 lecture with decks open, a `next deck` link sits at its right end.
 
 Under the date is a row for each of today's classes from the timetable. A row starts with the start time and the course. After them comes the kind as a lower-case code from Quest, such as `lec` or `tut`. Only the class on now, or the next one today, is drawn in red. That row also shows the room, and at the right the minutes until it starts, such as `25m`, or `now` while it is on. A course with no folder in Downloads is grey. A mistake in the timetable or the settings is shown in one line under the classes.
 
@@ -35,11 +35,23 @@ Below the classes is a chip for each virtual desktop, four to a row, with its na
 
 Clicking a class goes to the desktop named after its course number, and makes that desktop if it is missing. When nothing is open there yet, the subject's setup opens on it. Clicking a chip switches to that desktop.
 
-Open the panel with Ctrl+Alt+C or with the Crammy icon in the tray. The Crammy button on the taskbar opens it as well. That button comes from a Windhawk mod (see `windhawk\README.md`), and the shortcut and the tray icon work without it.
+Open the panel with Ctrl+Alt+C or with the Crammy icon in the tray. A click on Crammy's line on the taskbar opens it as well. That line comes from a Windhawk mod (see `windhawk\README.md`), and the shortcut and the tray icon work without it.
 
 These work while Crammy runs in the background. Start it with `crammy --background`, or choose Start at sign-in in the tray menu to make a shortcut in the Startup folder that does so each time you sign in. `crammy --panel` shows the panel and starts the background copy first when it is not running.
 
 The timetable is `timetable.txt` and the settings are `settings.txt`, both next to the exe. The settings file may be missing; `docs/guide.md` lists its keys and says how to copy a new term's classes from Quest into the timetable.
+
+## Next and the taskbar line
+
+With the Windhawk mod switched on, the taskbar shows one line about the next class where the weather was, such as `ECE 150 lec · PSE 5353 · in 5m`. The line names the class on now, or else the next one today. After the last class of the day, it shows the first class of the next day with classes. Crammy works the line out again every 10 seconds.
+
+Pressing `▸ next` after the line goes to that class's desktop and opens its setup, as a class click in the panel does. When every file of the setup is already showing in windows Next opened, it only switches. For a course with no folder in Downloads, the button is greyed.
+
+After Next opens a setup, Crammy watches the folder of every `newest` line until midnight or the next press of Next. A newer download that fits the pattern opens over the old slides once its size has stopped changing, and the window with the old slides closes. This happens only while that desktop is showing, and Crammy closes only windows it opened itself.
+
+The ECE 150 lecture setup uses a `sequence` line. Next opens the deck after the place saved in `places.txt`, and shows the tick list when there is no place yet. Opening the setup any other way saves the place as well, as the highest deck opened. While those decks are open, the line shows the deck's name where the room was.
+
+The next deck is reached from the panel only. Its `next deck` link reopens the PdfCraft window with today's decks and the following one as tabs, and moves the place on. At the last deck the link reads `last deck` and does nothing.
 
 ## Profiles
 
