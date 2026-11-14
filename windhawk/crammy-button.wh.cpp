@@ -205,7 +205,6 @@ void add_line( Controls::Grid root_grid ) {
     panel.VerticalAlignment( VerticalAlignment::Center );
     panel.Children().Append( text_button );
     panel.Children().Append( next_button );
-    root_grid.Children().Append( panel );
 
     refresh_line( text, next_button );
 
@@ -245,6 +244,8 @@ void add_line( Controls::Grid root_grid ) {
             }
         } );
     placed.timer.Start();
+    // Added last, so an error above leaves nothing in the taskbar's tree.
+    root_grid.Children().Append( panel );
     g_lines.push_back( std::move( placed ) );
 }
 
