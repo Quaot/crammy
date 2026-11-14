@@ -1,10 +1,10 @@
 # Crammy button
 
-`crammy-button.wh.cpp` is a Windhawk mod for the Windows 11 taskbar. It hides the Widgets button, which shows the weather at the left end of the taskbar. In its place it puts Crammy's line, such as `Mon 08:30 MATH 117 tut · DWE 1515`, with a `▸ next` button after it. Both are drawn in the taskbar's own font and text colour.
+`crammy-button.wh.cpp` is a Windhawk mod for the Windows 11 taskbar. It hides the Widgets button, which shows the weather at the left end of the taskbar. In its place it puts Crammy's line in two small rows, as the weather showed its temperature over its condition. The top row names the next class, such as `MATH 117 tut`, and the bottom row, a little dimmer, says where and when, such as `Mon 08:30 · DWE 1515`. A `▸` next button sits to the right of the rows, centred on their height. The rows and the button are drawn in the taskbar's own typeface and text colour, with the rows in a smaller size.
 
-Crammy keeps the line as the title of its hidden `CrammyBackground` window, and the mod reads that title every two seconds. A title that starts with `-` means Next has nothing to open for that class, so the mod shows the line without the `-` and greys the next button.
+Crammy keeps the line as the title of its hidden `CrammyBackground` window, with a newline between the two rows, and the mod reads that title every two seconds. A title with no newline, such as `No classes`, is shown as the top row alone. A title that starts with `-` means Next has nothing to open for that class, so the mod shows the line without the `-` and greys the next button.
 
-A click on the line opens the Crammy panel, because the mod posts the `CrammyShowPanel` message to the `CrammyBackground` window. A click on `▸ next` posts the `CrammyNext` message, and Crammy then goes to the class's desktop and opens its slides. When Crammy is not running, the line reads `Crammy is not running` and the next button is greyed, while a click on the line starts `crammy.exe --panel`. The mod does nothing more than that.
+A click on the rows opens the Crammy panel, because the mod posts the `CrammyShowPanel` message to the `CrammyBackground` window. A click on `▸` posts the `CrammyNext` message, and Crammy then goes to the class's desktop and opens its slides. When Crammy is not running, the top row reads `Crammy is not running` and the next button is greyed, while a click on the row starts `crammy.exe --panel`. The mod does nothing more than that.
 
 ## Adding it
 
@@ -15,7 +15,7 @@ A click on the line opens the Crammy panel, because the mod posts the `CrammySho
 
 To move from an older version, open the mod in Windhawk, press Edit, paste the new `crammy-button.wh.cpp` over the old code, and press Compile Mod again.
 
-The mod has one setting: the path to `crammy.exe`. It starts as `C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe`. Change it if Crammy moves.
+The mod has two settings. The first is the path to `crammy.exe`, which starts as `C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe`; change it if Crammy moves. The second, `line_width`, is the widest the two rows may be, in pixels at 100% scaling. It starts at 150, the width of the weather's spot before the Start button. Lower it if the rows reach the Start button, or raise it if the taskbar's buttons are not centred. A row that does not fit ends in an ellipsis.
 
 ## Switching it off
 
