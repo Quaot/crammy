@@ -296,6 +296,12 @@ vector<opened_window> open_windows_recorded( const vector<planned_window> &plan,
 
 vector<opened_window> open_window_in_place_of( const planned_window &window, HWND old_window, vector<wstring> &problems ) {
     RECT frame = visible_frame( old_window );
+    // A minimized window's frame is far off screen, so use the whole of its side instead
+    if ( IsIconic( old_window ) ) {
+        RECT screen;
+        SystemParametersInfoW( SPI_GETWORKAREA, 0, &screen, 0 );
+        frame = side_area( window.side, screen );
+    }
     return recorded( start_and_place( { window }, &frame ), problems );
 }
 

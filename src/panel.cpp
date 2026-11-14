@@ -380,8 +380,11 @@ void open_class( const today_row &row ) {
         if ( asked ) {
             picks = ask_for_picks( nullptr, chosen );
             // He may have moved to another desktop while the tick list was open
-            if ( picks.accepted ) problem = switch_to_desktop( desktop );
-            if ( !problem.empty() ) picks.accepted = false;
+            wstring switch_problem = picks.accepted ? switch_to_desktop( desktop ) : L"";
+            if ( !switch_problem.empty() ) {
+                problem += ( problem.empty() ? L"" : L" " ) + switch_problem;
+                picks.accepted = false;
+            }
         }
         if ( !asked || picks.accepted ) {
             vector<wstring> problems = open_setup( chosen, picks.picks, picks.separate );
