@@ -87,5 +87,5 @@ bool watch_has_ended( calendar_date started, calendar_date today );
 
 ## Window behaviour, checked by the owner
 
-- The hidden window's title is `background_title` of the current line, set at start, every minute and after every Next or next deck.
+- The hidden window's title is `background_title` of the current line, set at start, every 10 seconds and after every Next or next deck.
 - A second Next while the first is still opening windows, or while the tick list is open, is ignored.

@@ -59,10 +59,16 @@ bool has_pick( const setup &chosen ) {
     return false;
 }
 
+// True for the items --list shows and --pick can choose from: pick items, and sequence items
+// even when a place is saved, so a deck can be named in place of the next one.
+bool can_pick( const layout_item &item ) {
+    return item.kind == item_kind::pick || item.kind == item_kind::sequence;
+}
+
 int list_pdfs( const setup &chosen ) {
     vector<wstring> lines;
     for ( const layout_item &item : chosen.items ) {
-        if ( !needs_ticks( chosen, item ) ) continue;
+        if ( !can_pick( item ) ) continue;
         lines.push_back( L"[" + item.side + L"]" );
         for ( const pdf_file &pdf : pick_files( item ) ) {
             lines.push_back( date_text( pdf.modified ) + L"  " + pdf.folder + L"\\" + pdf.name );
@@ -77,7 +83,7 @@ int list_pdfs( const setup &chosen ) {
 bool find_pick( const setup &chosen, const wstring &text, size_t &item_index, wstring &path ) {
     for ( bool exact : { true, false } ) {
         for ( size_t i = 0; i < chosen.items.size(); ++i ) {
-            if ( !needs_ticks( chosen, chosen.items[i] ) ) continue;
+            if ( !can_pick( chosen.items[i] ) ) continue;
             for ( const pdf_file &pdf : pick_files( chosen.items[i] ) ) {
                 bool matches = exact ? lower( stem( pdf.name ) ) == lower( text ) : contains_ci( pdf.name, text );
                 if ( matches ) {

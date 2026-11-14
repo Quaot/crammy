@@ -520,8 +520,9 @@ void Wh_ModAfterInit() {
 
 void Wh_ModBeforeUninit() {
     g_unloading = true;
-    // Without the taskbar thread the timers cannot be stopped here, and one
-    // that ticks after the mod is freed would crash Explorer.
+    // The timer can only be stopped on the taskbar thread. If that thread
+    // cannot be reached, the timer may still fire after the mod is unloaded.
+    // This is rare and accepted.
     if ( !run_on_taskbar_thread( restore_on_taskbar ) ) {
         Wh_Log( L"Could not reach the taskbar thread to remove the line" );
     }

@@ -110,30 +110,6 @@ void close_if_ours( const opened_window &window, HWND keep ) {
         PostMessageW( window.window, WM_CLOSE, 0, 0 );
 }
 
-unsigned long long file_size( const wstring &path ) {
-    WIN32_FILE_ATTRIBUTE_DATA data;
-    if ( !GetFileAttributesExW( path.c_str(), GetFileExInfoStandard, &data ) ) return 0;
-    return ( static_cast<unsigned long long>( data.nFileSizeHigh ) << 32 ) | data.nFileSizeLow;
-}
-
-// Writes a new copy and then moves it over places.txt, so a failed write never leaves half a file.
-// A places.txt that exists but cannot be read is left alone, since rewriting it would lose its places.
-bool save_place( const wstring &title, const wstring &deck_name ) {
-    wstring path = places_path();
-    std::map<wstring, wstring> places;
-    if ( is_file( path ) ) {
-        wstring text = read_text_file( path );
-        if ( text.empty() && file_size( path ) > 0 ) return false;
-        places = read_places( text );
-    }
-    places[title] = deck_name;
-    wstring temporary = path + L".tmp";
-    return write_text_file( temporary, write_places( places ) ) &&
-           MoveFileExW( temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING );
-}
-
-const wchar_t *place_problem = L"Could not save the place in places.txt.";
-
 wstring control_folder() {
     return join_path( expand_variables( L"%TEMP%" ), L"crammy" );
 }
@@ -238,26 +214,19 @@ void check_watches() {
     }
 }
 
-// Remembers the decks a sequence line opened, and saves the highest as the place
-wstring remember_decks( const setup &chosen, const layout_item &item, const next_class &next,
-                        const vector<opened_window> &opened, const wstring &desktop, calendar_date today ) {
-    vector<wstring> deck_paths;
-    for ( const pdf_file &pdf : pick_files( item ) ) deck_paths.push_back( pdf.path );
-
+// Remembers the decks a sequence line opened, and which windows show them
+void remember_decks( const setup &chosen, const layout_item &item, const next_class &next,
+                     const vector<opened_window> &opened, const wstring &desktop, calendar_date today ) {
     deck_run run{ chosen.title, next.meeting.course, next.meeting.kind, today, item, {}, {}, L"", desktop };
+    run.opened = decks_shown( item, opened );
     for ( const opened_window &window : opened ) {
-        if ( window.app != program::pdfcraft || !is_one_of( window.path, deck_paths ) ) continue;
-        if ( !is_one_of( window.path, run.opened ) ) run.opened.push_back( window.path );
+        if ( window.app != program::pdfcraft || !is_one_of( window.path, run.opened ) ) continue;
         bool listed = false;
         for ( const opened_window &each : run.windows ) listed = listed || each.window == window.window;
         if ( !listed ) run.windows.push_back( window );
         run.side = window.side;
     }
-    if ( run.opened.empty() ) return L"";
-    std::sort( run.opened.begin(), run.opened.end(),
-               []( const wstring &a, const wstring &b ) { return deck_before( file_name( a ), file_name( b ) ); } );
-    decks = run;
-    return save_place( chosen.title, file_name( decks.opened.back() ) ) ? L"" : place_problem;
+    if ( !run.opened.empty() ) decks = run;
 }
 
 void add_problem( wstring &problem, const wstring &more ) {
@@ -344,7 +313,8 @@ wstring open_next() {
     records.insert( records.end(), opened.begin(), opened.end() );
     watches.clear();
     start_watches( chosen, opened, desktop, at.date );
-    if ( sequence ) add_problem( problem, remember_decks( chosen, *sequence, next, opened, desktop, at.date ) );
+    if ( sequence ) remember_decks( chosen, *sequence, next, opened, desktop, at.date );
+    add_problem( problem, save_places( chosen, opened ) );     // as open_setup does
 
     for ( const wstring &each : problems ) add_problem( problem, each );
     return problem;
@@ -363,6 +333,12 @@ void start_next_runner( HWND background_window ) {
 void on_next_timer( UINT_PTR timer_id ) {
     if ( timer_id == line_timer ) refresh_line();
     else if ( timer_id == watch_timer ) check_watches();
+}
+
+void run_as_busy( const std::function<void()> &work ) {
+    busy = true;
+    work();
+    stop_being_busy();
 }
 
 bool next_is_busy() {
