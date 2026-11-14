@@ -85,9 +85,9 @@ void check_finding() {
            "at 16:20 the last class of Monday has ended, so the class is on Tuesday" );
 
     // GENE 119 is not in the known list
-    next = find_next_class( blocks, monday, 600, known );
+    next = find_next_class( blocks, monday, 625, known );
     check( is_class( next, L"GENE 119", L"SEM", 630, L"STC 0050" ) && next.today,
-           "at 10:00 on Monday the class is the GENE 119 SEM" );
+           "at 10:25 on Monday the MATH 117 TUT has ended and the class is the GENE 119 SEM" );
     check( !next.known, "GENE 119 is not a known course" );
 
     next = find_next_class( blocks, { 2026, 11, 21 }, 600, known );
@@ -113,6 +113,10 @@ void check_line_today() {
 
     check( line_text( later, 805, L"" ) == L"ECE 150 lec" + dot + L"PSE 5353" + dot + L"in 5m",
            "a class starting in 5 minutes reads in 5m" );
+    check( line_text( later, 750, L"" ) == L"ECE 150 lec" + dot + L"PSE 5353" + dot + L"in 60m",
+           "a class exactly 60 minutes away reads in 60m" );
+    check( line_text( later, 749, L"" ) == L"ECE 150 lec" + dot + L"PSE 5353" + dot + L"13:30",
+           "a class 61 minutes away reads its start time" );
     check( line_text( later, 760, L"" ) == L"ECE 150 lec" + dot + L"PSE 5353" + dot + L"in 50m",
            "a class starting in 50 minutes reads in 50m" );
     check( line_text( later, 825, L"" ) == L"ECE 150 lec" + dot + L"PSE 5353" + dot + L"now",
