@@ -71,7 +71,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/settings.cpp` | Reading and writing `settings.txt` and the shortcut text, and building the command that starts Youtonomous |
 | `src/subjects.cpp` | Matching a class to a desktop name and to a setup, plus two small helpers: the name of a class kind, and the check for a course folder in Downloads |
 | `src/panel_model.cpp` | What the panel shows and does, as plain data with no window: today's rows and the desktop tiles, and the plan for a class click (the types are in `panel_model.h`) |
-| `src/panel.cpp` | The panel window; `toggle_panel` in `panel.h` shows it or hides it |
+| `src/panel.cpp` | The panel window; `toggle_panel` in `panel.h` shows it or hides it, and `show_panel` only shows it |
 | `src/background.cpp` | Background mode: the hidden `CrammyBackground` window, the tray icon, the shortcut, the one-copy lock and the Startup shortcut |
 | `src/ui.cpp` | Fonts, DPI scaling, window creation, the message loop |
 | `src/text.cpp` | String, path and file helpers |
@@ -162,9 +162,9 @@ Windows 11 Notepad has no way for another program to save or close a tab, which 
 | `--background --show` | The same, and shows the panel as soon as it has started. When a background Crammy is already running, asks it to show the panel and exits |
 | `--panel` | Asks the running background Crammy to show or hide its panel, then exits. When none is running, starts one with `--background --show` and exits |
 
-`--panel` starts the new copy through `explorer.exe`, so that the copy is not tied to whatever ran `--panel`, such as a taskbar button.
+`--panel` starts the new copy itself with `CreateProcessW` and `DETACHED_PROCESS`, from the folder of `crammy.exe`. The copy then keeps running when whatever ran `--panel` ends, such as a taskbar button. If the start fails, it is tried once more with `CREATE_BREAKAWAY_FROM_JOB` added. An earlier version started it through `explorer.exe`, which can drop the arguments.
 
-**The window and the message.** `run_background` in `background.cpp` makes a hidden top-level window of the class `CrammyBackground`. Anything that wants the panel finds that window and posts it the registered message `CrammyShowPanel` (`show_panel_message()`, from `RegisterWindowMessageW`). The window answers by calling `toggle_panel`. `--panel` and the Windhawk mod both work this way, (`--panel` through `ask_running_crammy_to_toggle_panel`). Keep the class name and the message name as they are: the mod has them written in.
+**The window and the message.** `run_background` in `background.cpp` makes a hidden top-level window of the class `CrammyBackground`. Anything that wants the panel finds that window and posts it the registered message `CrammyShowPanel` (`show_panel_message()`, from `RegisterWindowMessageW`). With a wparam of 0 the window calls `toggle_panel`, which shows the panel or hides it. `--panel` and the Windhawk mod both send 0 (`--panel` through `ask_running_crammy_to_toggle_panel`). `--background --show` sends 1 through `ask_running_crammy_to_show_panel`, and the window then calls `show_panel`, which opens the panel and leaves an open one as it is. Keep the class name and the message name as they are: the mod has them written in.
 
 **One copy only.** `run_background` first takes the named mutex `CrammyBackgroundLock` and holds it until the process ends. A second copy finds the mutex taken and exits. The mutex covers two launches at the same moment, before either has made its window; `background_is_running` only looks for the window.
 
@@ -180,7 +180,7 @@ Clicking a class goes to the desktop named after the course number (`desktop_nam
 
 The Pomodoro buttons start Youtonomous through `youtonomous_command`, with the long or the short video from the settings. Nothing else starts Youtonomous.
 
-**The Windhawk mod.** `windhawk\crammy-button.wh.cpp` hides the Widgets button on the taskbar and puts a Crammy button in its place. A click posts `CrammyShowPanel`, or runs `crammy.exe --panel` when the background window does not exist. It does nothing else, so that as little as possible runs inside Explorer. `windhawk\README.md` says how to add it and switch it off. The owner adds it himself.
+**The Windhawk mod.** `windhawk\crammy-button.wh.cpp` hides the Widgets button on the taskbar and puts a Crammy button in its place. A click posts `CrammyShowPanel`, or runs `crammy.exe --panel` when the background window does not exist. Before either, it calls `AllowSetForegroundWindow`, because Explorer had the click and Windows only lets that program hand the focus on. For the post, it names the process of the `CrammyBackground` window; for `--panel`, it uses `ASFW_ANY`. It does nothing else, so that as little as possible runs inside Explorer. `windhawk\README.md` says how to add it and switch it off. The owner adds it himself.
 
 ## Timetable
 
