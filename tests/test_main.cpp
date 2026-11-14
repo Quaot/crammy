@@ -29,6 +29,7 @@ void test_background();
 void test_desktops();
 void test_next_line();
 void test_slide_watch();
+void test_sequence();
 
 namespace {
 
@@ -278,6 +279,7 @@ int wmain( int argument_count, wchar_t **arguments ) {
     test_desktops();
     test_next_line();
     test_slide_watch();
+    test_sequence();
 
     if ( argument_count > 2 && wstring( arguments[1] ) == L"--panel-picture" ) save_panel_picture( arguments[2] );
     else if ( argument_count > 1 ) save_picture( canvas, arguments[1] );
