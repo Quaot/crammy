@@ -73,3 +73,11 @@ With the real timetable on Monday 2026-11-16:
 - 1320 with the deck `3.02 Linear search` still gives `Tue 10:30 MATH 115 tut · DWE 3516`, because that class is not today.
 
 A next_class made in the test, today, on now, course `ECE 150`, kind `LEC`, with the deck `1.08 Conditional statements and comparison operators`, gives a line of exactly 48 characters ending in `…`, whose first 47 characters are the start of `ECE 150 lec · 1.08 Conditional statements and comparison operators`.
+
+## Also settled
+
+- A class exactly 60 minutes away counts as within 60 minutes: `in 60m`. At 61 minutes the start time shows.
+- Characters are counted as `wstring` characters, so the middle dot and the ellipsis count as one each.
+- When `today` is true, `date` is the day passed as today.
+- With `found` false the line is `No classes`, whatever the deck.
+- On Monday 2026-11-16 at 625 (10:25), MATH 117 TUT has ended and the class is GENE 119 SEM at 630, with `known` false.
