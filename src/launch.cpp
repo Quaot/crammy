@@ -2,7 +2,37 @@
 
 #include "desktops.h"
 #include "notes_tabs.h"
+#include "sequence.h"
 #include "tiling.h"
+
+vector<pdf_file> pick_files( const layout_item &item ) {
+    if ( item.kind != item_kind::sequence ) return find_pdfs( item.paths, true );
+
+    vector<pdf_file> found = find_pdfs( item.paths, false );
+    vector<wstring> names;
+    for ( const pdf_file &pdf : found ) names.push_back( pdf.name );
+
+    vector<pdf_file> decks;
+    for ( const wstring &name : deck_order( names ) ) {
+        for ( const pdf_file &pdf : found ) {
+            if ( pdf.name == name ) { decks.push_back( pdf ); break; }
+        }
+    }
+    return decks;
+}
+
+// The place saved for this setup, or "" when there is none
+static wstring saved_place( const setup &chosen ) {
+    if ( !is_file( places_path() ) ) return L"";
+    std::map<wstring, wstring> places = read_places( read_text_file( places_path() ) );
+    auto found = places.find( chosen.title );
+    return found == places.end() ? L"" : found->second;
+}
+
+bool needs_ticks( const setup &chosen, const layout_item &item ) {
+    if ( item.kind == item_kind::pick ) return true;
+    return item.kind == item_kind::sequence && saved_place( chosen ).empty();
+}
 
 vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
                                    vector<wstring> &problems ) {
@@ -34,6 +64,20 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
         case item_kind::pick:
             if ( i < picks.size() ) pdfs = picks[i];
             break;
+        case item_kind::sequence: {
+            wstring place = saved_place( chosen );
+            if ( place.empty() ) {
+                if ( i < picks.size() ) pdfs = picks[i];     // no place yet: the ticked decks, as for pick
+                break;
+            }
+            vector<pdf_file> decks = pick_files( item );
+            vector<wstring> names;
+            for ( const pdf_file &deck : decks ) names.push_back( deck.name );
+            wstring next = deck_after( names, place );
+            for ( const pdf_file &deck : decks ) if ( deck.name == next ) pdfs = { deck.path };
+            if ( pdfs.empty() ) problems.push_back( L"No numbered lecture decks found in " + item.paths[0] );
+            break;
+        }
         case item_kind::newest: {
             vector<pdf_file> matches = find_pdfs( item.paths, true );
             if ( matches.empty() ) {
@@ -52,7 +96,7 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
         if ( first_pdf.empty() ) first_pdf = pdfs[0];
 
         // Acrobat gets a window per PDF. PdfCraft shows several as tabs unless asked to separate them.
-        bool one_window_each = item.app == viewer::acrobat || ( item.kind == item_kind::pick && separate );
+        bool one_window_each = item.app == viewer::acrobat || ( ( item.kind == item_kind::pick || item.kind == item_kind::sequence ) && separate );
         program app = item.app == viewer::acrobat ? program::acrobat : program::pdfcraft;
         if ( one_window_each ) {
             for ( const wstring &pdf : pdfs ) plan.push_back( { item.side, app, { pdf } } );

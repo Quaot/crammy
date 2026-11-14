@@ -23,14 +23,15 @@ const wchar_t *header =
     L"#   newest \"Lec*.pdf\"           the newest PDF whose name fits; * matches any text\r\n"
     L"#   tabs \"a.pdf\" \"b.pdf\"        one PdfCraft window, one tab per PDF\r\n"
     L"#   pick \"folder\" \"file\"        tick PDFs from these each time you open the setup\r\n"
+    L"#   sequence \"folder\"           the next numbered lecture deck in that folder, after the one last opened\r\n"
     L"#   folder \"folder\"             File Explorer on that folder\r\n"
     L"#\r\n"
     L"# Add  with acrobat  at the end of a PDF line to open it in Adobe Acrobat in place of PdfCraft.\r\n";
 
-const wchar_t *kind_words[] = { L"notes", L"pdf", L"tabs", L"pick", L"folder", L"newest" };
+const wchar_t *kind_words[] = { L"notes", L"pdf", L"tabs", L"pick", L"folder", L"newest", L"sequence" };
 
 bool read_kind( const wstring &word, item_kind &kind ) {
-    for ( int i = 0; i < 6; ++i ) {
+    for ( int i = 0; i < 7; ++i ) {
         if ( word == kind_words[i] ) {
             kind = static_cast<item_kind>( i );
             return true;
@@ -73,7 +74,8 @@ viewer take_viewer( wstring &rest ) {
 
 wstring check_count( item_kind kind, size_t count ) {
     if ( kind == item_kind::notes && count > 1 ) return L"notes takes at most one file";
-    if ( ( kind == item_kind::pdf || kind == item_kind::folder || kind == item_kind::newest ) && count != 1 ) {
+    if ( ( kind == item_kind::pdf || kind == item_kind::folder || kind == item_kind::newest ||
+         kind == item_kind::sequence ) && count != 1 ) {
         return L"this takes exactly one path";
     }
     if ( ( kind == item_kind::tabs || kind == item_kind::pick ) && count == 0 ) return L"this needs at least one path";
@@ -211,7 +213,7 @@ profile_book read_book( const wstring &text ) {
         wstring rest = ( space == wstring::npos ) ? L"" : value.substr( space + 1 );
         item_kind kind;
         if ( !read_kind( word, kind ) ) {
-            book.errors.push_back( where + L"unknown window '" + word + L"' (use notes, pdf, newest, tabs, pick or folder)" );
+            book.errors.push_back( where + L"unknown window '" + word + L"' (use notes, pdf, newest, tabs, pick, sequence or folder)" );
             continue;
         }
         viewer app = take_viewer( rest );
