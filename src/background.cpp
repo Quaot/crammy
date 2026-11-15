@@ -6,6 +6,7 @@
 
 #include "next_runner.h"
 #include "panel.h"
+#include "session.h"
 #include "settings.h"
 #include "tiling.h"
 #include "timetable.h"
@@ -22,6 +23,8 @@ const UINT menu_setups = 1;
 const UINT menu_timetable = 2;
 const UINT menu_start_at_sign_in = 3;
 const UINT menu_quit = 4;
+const UINT menu_save_and_close = 5;
+const UINT menu_reopen = 6;
 
 UINT taskbar_created_message = 0;
 
@@ -105,11 +108,59 @@ void edit_timetable() {
     start_process( quoted( program_file( program::notepad_pp ) ) + L" " + quoted( timetable_path() ) );
 }
 
+// The saved session, when it records at least one window
+bool has_saved_session( saved_session &session ) {
+    if ( !is_file( session_path() ) ) return false;
+    session = read_session( read_text_file( session_path() ) );
+    return !session.windows.empty();
+}
+
+void save_and_close_everything() {
+    vector<wstring> problems;
+    int count = save_and_close_all( session_path(), problems );
+    wstring text = L"Saved " + std::to_wstring( count ) + ( count == 1 ? L" window." : L" windows." );
+    for ( const wstring &problem : problems ) text += L"\r\n\r\n" + problem;
+    MessageBoxW( nullptr, text.c_str(), L"Crammy", MB_OK | ( problems.empty() ? MB_ICONINFORMATION : MB_ICONWARNING ) );
+}
+
+void reopen_last_session() {
+    vector<wstring> problems = reopen_session( session_path() );
+    wstring text;
+    for ( const wstring &problem : problems ) text += ( text.empty() ? L"" : L"\r\n\r\n" ) + problem;
+    if ( !text.empty() ) MessageBoxW( nullptr, text.c_str(), L"Crammy", MB_OK | MB_ICONWARNING );
+}
+
+// Asks once, after sign-in, whether to put back what was open before the PC was shut down
+void ask_about_saved_session() {
+    saved_session session;
+    if ( !has_saved_session( session ) || session.asked ) return;
+    vector<wstring> desktops;
+    for ( const saved_window &window : session.windows ) {
+        bool listed = window.desktop.empty();
+        for ( const wstring &each : desktops ) if ( lower( each ) == lower( window.desktop ) ) listed = true;
+        if ( !listed ) desktops.push_back( window.desktop );
+    }
+    size_t count = session.windows.size();
+    wstring text = L"Reopen what you had open last time? " + std::to_wstring( count ) + ( count == 1 ? L" window" : L" windows" );
+    for ( size_t i = 0; i < desktops.size(); ++i )
+        text += ( i == 0 ? L" on desktops " : i + 1 == desktops.size() ? L" and " : L", " ) + desktops[i];
+    text += L".";
+    if ( MessageBoxW( nullptr, text.c_str(), L"Crammy", MB_YESNO | MB_ICONQUESTION ) == IDYES ) {
+        reopen_last_session();   // marks it asked
+        return;
+    }
+    session.asked = true;
+    write_text_file( session_path(), write_session( session ) );
+}
+
 void show_tray_menu( HWND window ) {
+    saved_session session;
     HMENU menu = CreatePopupMenu();
     AppendMenuW( menu, MF_STRING, menu_setups, L"Setups\x2026" );
     AppendMenuW( menu, MF_STRING, menu_timetable, L"Edit timetable" );
     AppendMenuW( menu, MF_STRING | ( shortcut_exists() ? MF_CHECKED : 0 ), menu_start_at_sign_in, L"Start at sign-in" );
+    AppendMenuW( menu, MF_STRING, menu_save_and_close, L"Save and close all" );
+    AppendMenuW( menu, MF_STRING | ( has_saved_session( session ) ? 0 : MF_GRAYED ), menu_reopen, L"Reopen last session" );
     AppendMenuW( menu, MF_SEPARATOR, 0, nullptr );
     AppendMenuW( menu, MF_STRING, menu_quit, L"Quit" );
 
@@ -122,6 +173,8 @@ void show_tray_menu( HWND window ) {
     if ( chosen == menu_setups ) show_setups();
     else if ( chosen == menu_timetable ) edit_timetable();
     else if ( chosen == menu_start_at_sign_in ) flip_start_at_sign_in();
+    else if ( chosen == menu_save_and_close ) save_and_close_everything();
+    else if ( chosen == menu_reopen ) reopen_last_session();
     else if ( chosen == menu_quit ) DestroyWindow( window );
 }
 
@@ -263,6 +316,7 @@ int run_background( bool show_panel_now ) {
 
     start_next_runner( window );
     if ( show_panel_now ) show_panel();
+    ask_about_saved_session();
     run_message_loop();
     return 0;
 }

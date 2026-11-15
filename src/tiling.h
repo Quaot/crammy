@@ -1,5 +1,7 @@
 #pragma once
 
+#include <windows.h>
+
 #include "text.h"
 
 enum class program { pdfcraft, acrobat, notepad_pp, explorer };
@@ -14,6 +16,8 @@ struct planned_window {
     wstring control_file;   // PdfCraft only: when set, the window starts with --control and this file
     wstring desktop;        // the desktop this window goes to, or "" for the desktop showing
     int split = 50;         // the left side's share of the screen width in percent
+    bool has_frame = false; // when true, the window goes exactly to frame and is never snapped
+    RECT frame{};
 };
 
 #include <windows.h>

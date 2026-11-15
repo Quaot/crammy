@@ -9,7 +9,7 @@ struct setup_request {
 };
 
 struct command_line {
-    wstring action;             // "", "list", "check", "edit", "background", "panel"
+    wstring action;             // "", "list", "check", "edit", "background", "panel", "save-and-close", "reopen"
     wstring list_title;         // --list "title"
     vector<setup_request> setups;
     bool show = false;          // --show

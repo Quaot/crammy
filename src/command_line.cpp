@@ -22,7 +22,8 @@ command_line parse_command_line( const vector<wstring> &arguments ) {
         } else if ( flag == L"--list" ) {
             result.action = L"list";
             if ( is_value( i + 1 ) ) result.list_title = arguments[++i];
-        } else if ( flag == L"--check" || flag == L"--edit" || flag == L"--background" || flag == L"--panel" ) {
+        } else if ( flag == L"--check" || flag == L"--edit" || flag == L"--background" || flag == L"--panel" ||
+                    flag == L"--save-and-close" || flag == L"--reopen" ) {
             result.action = flag.substr( 2 );
         } else if ( flag == L"--show" ) {
             result.show = true;

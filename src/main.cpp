@@ -10,6 +10,8 @@
 //   crammy --edit                             the profile editor
 //   crammy --background [--show]              the tray icon and shortcut, with no window
 //   crammy --panel                            shows the panel of the background Crammy
+//   crammy --save-and-close                   saves and closes every study window, remembering them
+//   crammy --reopen                           opens them again where they were
 
 #include <windows.h>
 #include <objbase.h>
@@ -17,6 +19,7 @@
 #include "background.h"
 #include "command_line.h"
 #include "launch.h"
+#include "session.h"
 #include "tiling.h"
 #include "ui.h"
 
@@ -159,6 +162,20 @@ int WINAPI wWinMain( HINSTANCE, HINSTANCE, PWSTR, int ) {
     if ( action == L"panel" ) {
         if ( !ask_running_crammy_to_toggle_panel() ) start_background_with_panel();
         return 0;
+    }
+
+    if ( action == L"save-and-close" ) {
+        vector<wstring> problems;
+        int count = save_and_close_all( session_path(), problems );
+        say( L"Saved " + std::to_wstring( count ) + ( count == 1 ? L" window." : L" windows." ) );
+        say_all( problems );
+        return problems.empty() ? 0 : 1;
+    }
+
+    if ( action == L"reopen" ) {
+        vector<wstring> problems = reopen_session( session_path() );
+        say_all( problems );
+        return problems.empty() ? 0 : 1;
     }
 
     if ( action == L"edit" ) {

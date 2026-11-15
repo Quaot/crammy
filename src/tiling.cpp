@@ -103,6 +103,7 @@ struct live_window {
     DWORD process_id = 0;
     HWND hwnd = nullptr;
     bool on_desktop = false;    // moved to the desktop asked for, or no desktop was asked for
+    wstring move_problem;       // why the last try at moving it failed
 };
 
 
@@ -115,7 +116,13 @@ bool is_explorer( HWND hwnd ) {
 HWND find_window( const live_window &window, const std::set<HWND> &taken ) {
     for ( HWND hwnd : top_windows() ) {
         if ( taken.count( hwnd ) ) continue;
-        if ( window.plan.app == program::pdfcraft ) {
+        if ( window.plan.app == program::notepad_pp ) {
+            // Notepad++ shows one of its files in its title, whichever tab is in front
+            wstring title = title_of( hwnd );
+            if ( !contains_ci( title, L"Notepad++" ) ) continue;
+            for ( const wstring &path : window.plan.paths )
+                if ( contains_ci( title, file_name( path ) ) ) return hwnd;
+        } else if ( window.plan.app == program::pdfcraft ) {
             DWORD process_id = 0;
             GetWindowThreadProcessId( hwnd, &process_id );
             if ( process_id == window.process_id ) return hwnd;
@@ -207,9 +214,11 @@ RECT side_area( const wstring &side, const RECT &screen, int split = 50 ) {
 vector<RECT> window_targets( const vector<planned_window> &plan, const RECT &screen ) {
     vector<RECT> targets( plan.size() );
     for ( size_t i = 0; i < plan.size(); ++i ) {
+        if ( plan[i].has_frame ) { targets[i] = plan[i].frame; continue; }
         vector<size_t> group;   // windows on the same side and desktop, in plan order
         for ( size_t j = 0; j < plan.size(); ++j )
-            if ( plan[j].side == plan[i].side && lower( plan[j].desktop ) == lower( plan[i].desktop ) ) group.push_back( j );
+            if ( !plan[j].has_frame && plan[j].side == plan[i].side && lower( plan[j].desktop ) == lower( plan[i].desktop ) )
+                group.push_back( j );
         size_t row = 0;
         while ( group[row] != i ) ++row;
         RECT area = side_area( plan[i].side, screen, plan[i].split );
@@ -237,7 +246,7 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
     for ( size_t i = 0; i < plan.size(); ++i ) {
         live_window window{ plan[i], frame ? *frame : targets[i] };
         for ( const planned_window &other : plan )
-            if ( &other != &plan[i] && other.side == plan[i].side && lower( other.desktop ) == lower( plan[i].desktop ) ) ++window.rows;
+            if ( &other != &plan[i] && !other.has_frame && other.side == plan[i].side && lower( other.desktop ) == lower( plan[i].desktop ) ) ++window.rows;
         windows.push_back( window );
     }
 
@@ -249,7 +258,9 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
         } else if ( window.plan.app == program::acrobat ) {
             start_process( acrobat_command( window.plan.paths[0] ) );
         } else if ( window.plan.app == program::notepad_pp ) {
-            start_process( notepad_command( window.plan.paths[0] ) );
+            wstring command = notepad_command( window.plan.paths[0] );
+            for ( size_t i = 1; i < window.plan.paths.size(); ++i ) command += L" " + quoted( window.plan.paths[i] );
+            start_process( command );
         } else {
             start_process( L"explorer.exe " + quoted( window.plan.paths[0] ) );
         }
@@ -267,21 +278,25 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
                 window.hwnd = find_window( window, taken );
                 if ( window.hwnd ) taken.insert( window.hwnd );
             }
+            // A new window is only on a desktop once Explorer has taken it in, which can be a moment
+            // after it appears, so a move that fails is tried again on the next pass
             if ( window.hwnd && !window.on_desktop ) {
                 const wstring &desktop = window.plan.desktop;
-                wstring problem = desktop.empty() ? L"" : move_window_to_desktop( window.hwnd, desktop );
-                if ( !problem.empty() && problems ) problems->push_back( problem );
-                window.on_desktop = true;
+                window.move_problem = desktop.empty() ? L"" : move_window_to_desktop( window.hwnd, desktop );
+                window.on_desktop = window.move_problem.empty();
+                if ( !window.on_desktop ) settled = false;
             }
             if ( !window.hwnd ) { settled = false; continue; }
             if ( !is_in_place( window.hwnd, window.target ) ) {
-                move_window( window.hwnd, window.target, frame != nullptr || !window.plan.desktop.empty() );
+                move_window( window.hwnd, window.target, frame != nullptr || !window.plan.desktop.empty() || window.plan.has_frame );
                 settled = false;
             }
         }
         quiet_checks = settled ? quiet_checks + 1 : 0;
         Sleep( 100 );
     }
+    for ( const live_window &window : windows )
+        if ( window.hwnd && !window.on_desktop && problems ) problems->push_back( window.move_problem );
 
     if ( frame ) return windows;
 
@@ -290,6 +305,7 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
     for ( const wchar_t *side : { L"left", L"right", L"full" } ) {
         for ( live_window &window : windows ) {
             if ( window.plan.side != side || !window.hwnd || !window.plan.desktop.empty() ) continue;
+            if ( window.plan.has_frame ) continue;   // it went straight to its own frame
             if ( window.plan.split == 50 ) snap( window );   // Windows only snaps to halves
             wait_until_still( window.hwnd );
             if ( !is_in_place( window.hwnd, window.target, 8 ) ) {

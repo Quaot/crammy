@@ -54,6 +54,12 @@ The ECE 150 lecture setup uses a `sequence` line. Next opens the deck after the 
 
 The next deck is reached from the panel only. Its `next deck` link reopens the PdfCraft window with today's decks and the following one as tabs, and moves the place on. At the last deck the link reads `last deck` and does nothing.
 
+## Before shutting down
+
+**Save and close all**, in the tray icon's menu, saves every file open in Notepad++, writes down every PdfCraft, Notepad++ and Acrobat window (its files, its desktop and where it sat on the screen) in `last session.txt`, and closes them all. It covers windows you opened yourself as well as Crammy's. A window it cannot close safely stays open and is named in the message afterwards, such as a Notepad++ tab with unsaved text and no file.
+
+At the next sign-in, Crammy asks once whether to reopen them. Each window goes back to its own desktop and its old place without the desktops switching. **Reopen last session** in the same menu does it again later. From a terminal, `crammy --save-and-close` and `crammy --reopen` do the same.
+
 ## Profiles
 
 `profiles.txt` sits next to the exe. A profile names a root folder. Its setups say what opens on each side.
