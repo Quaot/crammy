@@ -21,6 +21,7 @@
 #include "../src/ui.h"
 
 void test_existing( HWND canvas );
+void test_setup_options( HWND canvas );
 void test_timetable();
 void test_settings();
 void test_subjects();
@@ -274,6 +275,7 @@ int wmain( int argument_count, wchar_t **arguments ) {
 
     // Written from the specs in tests\specs
     test_existing( canvas );
+    test_setup_options( canvas );
     test_timetable();
     test_settings();
     test_subjects();
