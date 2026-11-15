@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.5
+// @version         0.6
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -15,21 +15,23 @@
 
 Hides the Widgets button at the left end of the taskbar and puts Crammy's line
 in its place, in two small rows like the weather's: the next class on top, such
-as `MATH 117 tut`, and where and when below it, such as `Mon 08:30 · DWE 1515`.
-To the left of the rows, the name of the virtual desktop showing is written in
-bold white on a red box, such as `150`. The `▸` button to the right of the rows
-is the next button. The line is read from Crammy every half second, so the box
-changes soon after a switch to another desktop.
+as `MATH 117 Tutorial`, and where and when below it, such as
+`Mon 08:30 · DWE 1515`. To the left of the rows, the name of the virtual
+desktop showing, such as `150`, is written a little larger, with a thin line
+after it. The faint `›` to the right of the rows is the next button. Everything
+is drawn in the taskbar's own typeface and text colour, and the buttons stay
+clear when pointed at or pressed. The line is read from Crammy every half
+second, so the name changes soon after a switch to another desktop.
 
 A click on the rows opens the Crammy panel. A click on `▸` goes to that class's
 desktop and opens its slides, as Next does in Crammy. The next button is greyed
 when Next has nothing to open for the class.
 
 When Crammy is not running, the top row reads `Crammy is not running` with the
-next button greyed and no desktop box, and a click on it starts
+next button greyed and no desktop name, and a click on it starts
 `crammy.exe --panel`.
 
-The whole line, the box and `▸` included, is kept within the width set as
+The whole line, the desktop name and `›` included, is kept within the width set as
 `line_width`, 270 by default, so it stays in the space the Widgets button had,
 before the Start button. A row that does not fit ends in an ellipsis. A width
 saved by an older version stays until it is changed in the settings.
@@ -205,7 +207,15 @@ Controls::Button make_button( UIElement content, double side_padding ) {
     button.Height( 40 );
     button.Padding( Thickness{ side_padding, 0, side_padding, 0 } );
     button.BorderThickness( Thickness{ 0, 0, 0, 0 } );
-    button.Background( Media::SolidColorBrush( winrt::Windows::UI::Color{ 0, 0, 0, 0 } ) );
+    Media::SolidColorBrush clear( winrt::Windows::UI::Color{ 0, 0, 0, 0 } );
+    button.Background( clear );
+    // The button's own pointer-over and pressed colours would turn it grey;
+    // these keys replace them, so it stays clear in every state.
+    for ( PCWSTR key : { L"ButtonBackground", L"ButtonBackgroundPointerOver", L"ButtonBackgroundPressed",
+                         L"ButtonBackgroundDisabled", L"ButtonBorderBrush", L"ButtonBorderBrushPointerOver",
+                         L"ButtonBorderBrushPressed", L"ButtonBorderBrushDisabled" } ) {
+        button.Resources().Insert( winrt::box_value( key ), clear );
+    }
     button.VerticalAlignment( VerticalAlignment::Center );
     return button;
 }
@@ -219,20 +229,20 @@ Controls::TextBlock make_row() {
     return row;
 }
 
-// The desktop's name in bold white on PdfCraft's red, so the desktop showing
-// can be seen at a glance. It starts hidden, until a title with a name is read.
+// The desktop's name, a little larger than the rows and in the taskbar's own
+// colour, with a thin line after it to set it apart from the class. It starts
+// hidden, until a title with a name is read.
 Controls::Border make_desktop_box( Controls::TextBlock name ) {
-    name.FontSize( 14 );
-    name.FontWeight( winrt::Windows::UI::Text::FontWeights::Bold() );
-    name.Foreground( Media::SolidColorBrush( winrt::Windows::UI::Color{ 255, 0xFF, 0xFF, 0xFF } ) );
+    name.FontSize( 15 );
     name.TextWrapping( TextWrapping::NoWrap );
     name.VerticalAlignment( VerticalAlignment::Center );
     Controls::Border box;
     box.Child( name );
-    box.Background( Media::SolidColorBrush( winrt::Windows::UI::Color{ 255, 0xB7, 0x02, 0x28 } ) );
-    box.CornerRadius( CornerRadius{ 4, 4, 4, 4 } );
-    box.Padding( Thickness{ 6, 2, 6, 2 } );
-    box.Margin( Thickness{ 0, 0, 2, 0 } );
+    // The thin line on the right, in the text colour at low opacity
+    box.BorderBrush( Media::SolidColorBrush( winrt::Windows::UI::Color{ 0x50, 0x80, 0x80, 0x80 } ) );
+    box.BorderThickness( Thickness{ 0, 0, 1, 0 } );
+    box.Padding( Thickness{ 2, 4, 8, 4 } );
+    box.Margin( Thickness{ 0, 0, 0, 0 } );
     box.VerticalAlignment( VerticalAlignment::Center );
     box.Visibility( Visibility::Collapsed );
     return box;
@@ -260,7 +270,6 @@ void add_line( Controls::Grid root_grid ) {
 
     Controls::TextBlock top = make_row();
     Controls::TextBlock bottom = make_row();
-    bottom.Opacity( 0.8 );
     Controls::StackPanel rows;
     rows.Orientation( Controls::Orientation::Vertical );
     rows.VerticalAlignment( VerticalAlignment::Center );
@@ -269,7 +278,9 @@ void add_line( Controls::Grid root_grid ) {
     Controls::Button text_button = make_button( rows, 6 );
 
     Controls::TextBlock next_text;
-    next_text.Text( L"\u25B8" );
+    next_text.Text( L"\u203A" );
+    next_text.FontSize( 18 );
+    next_text.Opacity( 0.55 );
     next_text.VerticalAlignment( VerticalAlignment::Center );
     Controls::Button next_button = make_button( next_text, 4 );
     Automation::AutomationProperties::SetName( next_button, L"Next class" );
