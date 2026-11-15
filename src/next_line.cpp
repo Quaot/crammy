@@ -1,3 +1,5 @@
+#include <cwctype>
+
 #include "next_line.h"
 #include "panel_model.h"
 #include "subjects.h"
@@ -77,7 +79,10 @@ next_class find_next_class( const vector<class_block> &blocks, calendar_date tod
 wstring line_text( const next_class &next, int minute_now, const wstring &deck ) {
     if ( !next.found ) return L"No classes";
     const class_meeting &meeting = next.meeting;
-    wstring top = meeting.course + L" " + lower( meeting.kind ).substr( 0, 3 );
+    // The kind as a word, such as Lecture or Tutorial, so the taskbar reads like a sentence
+    wstring kind = kind_name( meeting.kind );
+    if ( !kind.empty() ) kind[0] = towupper( kind[0] );
+    wstring top = meeting.course + L" " + kind;
     wstring bottom;
     if ( !next.today ) {
         bottom = wstring( day_names[weekday_of( next.date )] ) + L" " + clock_text( meeting.start_minute )

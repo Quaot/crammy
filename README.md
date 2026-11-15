@@ -43,7 +43,7 @@ The timetable is `timetable.txt` and the settings are `settings.txt`, both next 
 
 ## Next and the taskbar line
 
-With the Windhawk mod switched on, the taskbar shows the next class where the weather was, in two small rows like the weather's. The top row names the class, such as `ECE 150 lec`, and the row under it says where and when, such as `PSE 5353 · in 5m`. For a class on another day, the bottom row starts with its weekday and start time, as in `Tue 10:30 · DWE 3516`. A row longer than 24 characters is cut short with an ellipsis. The line names the class on now, or else the next one today. After the last class of the day, it shows the first class of the next day with classes. Crammy works the line out again every 10 seconds.
+With the Windhawk mod switched on, the taskbar shows the next class where the weather was, in two small rows like the weather's. The top row names the class, such as `ECE 150 Lecture`, and the row under it says where and when, such as `PSE 5353 · in 5m`. For a class on another day, the bottom row starts with its weekday and start time, as in `Tue 10:30 · DWE 3516`. A row longer than 24 characters is cut short with an ellipsis. The line names the class on now, or else the next one today. After the last class of the day, it shows the first class of the next day with classes. Crammy works the line out again every 10 seconds.
 
 Pressing `▸`, to the right of the two rows, goes to that class's desktop and opens its setup, as a class click in the panel does. When every file of the setup is already showing in windows Next opened, it only switches. For a course with no folder in Downloads, the button is greyed.
 

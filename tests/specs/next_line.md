@@ -48,7 +48,7 @@ With the real timetable, on Monday 2026-11-16:
 ## `line_text`
 
 The line has two rows, like the weather it replaces: a top row naming the class and a bottom row saying where and when. `line_text` returns them joined by one newline, `
-` (U+000A), with no newline at the end. Parts within a row are joined with ` · ` (space, middle dot U+00B7, space). The kind is the timetable's code in lower case cut to three letters: `LEC` gives `lec`, `TUT` gives `tut`, `PRJ` gives `prj`.
+` (U+000A), with no newline at the end. Parts within a row are joined with ` · ` (space, middle dot U+00B7, space). The kind is written out as a word with a capital first letter: `LEC` gives `Lecture`, `TUT` gives `Tutorial`, `LAB` gives `Lab`, `TST` gives `Test` and `SEM` gives `Seminar`. Any other code is lower-cased with a capital first letter, so `PRJ` gives `Prj`.
 
 The top row is always `<course> <kind>`.
 
@@ -67,20 +67,20 @@ Each row longer than 24 characters is cut to its first 23 characters followed by
 
 With the real timetable on Monday 2026-11-16:
 
-- 805 gives `ECE 150 lec
+- 805 gives `ECE 150 Lecture
 PSE 5353 · in 5m`.
-- 825 gives `ECE 150 lec
+- 825 gives `ECE 150 Lecture
 PSE 5353 · now`.
-- 400 gives `MATH 117 tut
+- 400 gives `MATH 117 Tutorial
 DWE 1515 · 08:30`.
-- 1320 gives `MATH 115 tut
+- 1320 gives `MATH 115 Tutorial
 Tue 10:30 · DWE 3516`.
-- 825 with the deck `3.02 Linear search` gives `ECE 150 lec
+- 825 with the deck `3.02 Linear search` gives `ECE 150 Lecture
 3.02 Linear search`.
-- 1320 with the deck `3.02 Linear search` still gives `MATH 115 tut
+- 1320 with the deck `3.02 Linear search` still gives `MATH 115 Tutorial
 Tue 10:30 · DWE 3516`, because that class is not today.
 
-A next_class made in the test, today, on now, course `ECE 150`, kind `LEC`, with the deck `1.08 Conditional statements and comparison operators`, gives `ECE 150 lec
+A next_class made in the test, today, on now, course `ECE 150`, kind `LEC`, with the deck `1.08 Conditional statements and comparison operators`, gives `ECE 150 Lecture
 ` followed by a bottom row of exactly 24 characters: the first 23 characters of the deck, then `…`.
 
 ## Also settled

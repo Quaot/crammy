@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.3
+// @version         0.4
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -27,7 +27,7 @@ When Crammy is not running, the top row reads `Crammy is not running` with the
 next button greyed, and a click on it starts `crammy.exe --panel`.
 
 The whole line, `▸` included, is kept within the width set as `line_width`,
-150 by default, so it stays in the space the Widgets button had, before the
+220 by default, so it stays in the space the Widgets button had, before the
 Start button. A row that does not fit ends in an ellipsis.
 
 Switch the mod off to bring the Widgets button back.
@@ -39,7 +39,7 @@ Switch the mod off to bring the Widgets button back.
 - crammy_path: C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe
   $name: Path to crammy.exe
   $description: The program to start when Crammy is not running.
-- line_width: 150
+- line_width: 220
   $name: Width of the line
   $description: The widest the line may be, the next button included, in pixels at 100% scaling. Lower it if the line reaches the Start button.
 */
@@ -67,7 +67,7 @@ using namespace winrt::Windows::UI::Xaml;
 
 const wchar_t line_name[] = L"CrammyLine";
 const wchar_t not_running_text[] = L"Crammy is not running";
-const int default_line_width = 150;
+const int default_line_width = 220;
 
 struct placed_line {
     winrt::weak_ref<Controls::Grid> panel;
@@ -455,9 +455,15 @@ bool run_on_taskbar_thread( void ( *proc )( HWND ) ) {
     };
     HWND window = find_taskbar_window();
     if ( !window ) {
+        Wh_Log( L"No taskbar window in this process" );
         return false;
     }
     DWORD thread_id = GetWindowThreadProcessId( window, nullptr );
+    // Already on the taskbar's thread, as Windhawk sometimes is when it unloads the mod: run it here
+    if ( thread_id == GetCurrentThreadId() ) {
+        proc( window );
+        return true;
+    }
     HHOOK hook = SetWindowsHookExW( WH_CALLWNDPROC, []( int code, WPARAM wparam, LPARAM lparam ) -> LRESULT {
         const CWPSTRUCT *message = (const CWPSTRUCT *)lparam;
         if ( code == HC_ACTION && message->message == run_message ) {
@@ -467,6 +473,7 @@ bool run_on_taskbar_thread( void ( *proc )( HWND ) ) {
         return CallNextHookEx( nullptr, code, wparam, lparam );
     }, nullptr, thread_id );
     if ( !hook ) {
+        Wh_Log( L"Could not hook the taskbar thread, error %u", GetLastError() );
         return false;
     }
     run_request request{ proc, window };
