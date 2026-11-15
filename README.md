@@ -89,6 +89,8 @@ Ending a PDF line with `with acrobat` opens it in Adobe Acrobat in place of PdfC
 
 `desktop = 150` puts the setup's windows on the virtual desktop named 150, so each subject can keep its own desktop. The windows open on the desktop showing and move there as soon as they appear, so nothing switches while they open. Once they are in place, Crammy shows that desktop in one move. It reads the desktop names from the registry.
 
+`split = 75` gives the left side 75% of the screen width and the right side the rest, like the 75/25 snap layout in Windows. It can go on a subject or on one setup. Without it the sides are halves. The exam setups use it to keep the paper wide on the left with the notes in a narrow strip on the right.
+
 A setup starts with every line of its profile, so lines shared by all setups can go under the profile heading.
 
 ## Build

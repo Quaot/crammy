@@ -12,7 +12,16 @@ struct planned_window {
     program app;
     vector<wstring> paths;  // PDFs for PdfCraft, one file for Notepad++, one folder for Explorer
     wstring control_file;   // PdfCraft only: when set, the window starts with --control and this file
+    wstring desktop;        // the desktop this window goes to, or "" for the desktop showing
+    int split = 50;         // the left side's share of the screen width in percent
 };
+
+#include <windows.h>
+
+// The part of the screen each planned window should fill, in plan order. Windows that share a
+// side split it into rows, top to bottom in plan order, but only with windows going to the same
+// desktop: windows on different desktops never share rows.
+vector<RECT> window_targets( const vector<planned_window> &plan, const RECT &screen );
 
 #include <initializer_list>
 
@@ -24,14 +33,22 @@ void press_keys( std::initializer_list<unsigned short> keys );
 DWORD start_process( wstring command_line );
 wstring quoted( const wstring &text );
 
+// The command line that starts PdfCraft on these PDFs in a window of its own, in Read mode,
+// fitted to width. control_file, when not empty, adds --control and that file.
+wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file );
+
+// The command line that starts Acrobat on one PDF in a new window, fitted to width.
+wstring acrobat_command( const wstring &path );
+
 // The command line that starts Notepad++ on one file, in a window of its own.
 wstring notepad_command( const wstring &path );
 vector<HWND> top_windows();
 wstring title_of( HWND hwnd );
 bool bring_to_front( HWND hwnd );
 
-// Starts every window, then moves each one to its part of the screen.
-// Returns a message for each window that never appeared.
+// Starts every window at once, then moves each one to its part of the screen. A window with a
+// desktop is moved there as soon as it appears and sized without keys or focus; the others are
+// snapped afterwards. Returns a message for each window that never appeared.
 vector<wstring> open_windows( const vector<planned_window> &plan );
 
 struct opened_window {

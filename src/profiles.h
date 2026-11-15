@@ -17,6 +17,7 @@ struct setup_block {
     wstring name;
     wstring notes_folder;
     wstring desktop;
+    int split = 0;                  // the left side's share of the width in percent; 0 when not set
     vector<written_item> items;
 };
 
@@ -26,6 +27,7 @@ struct profile_block {
     wstring root;
     wstring notes_folder;
     wstring desktop;
+    int split = 0;                  // as in setup_block
     vector<written_item> items;     // shared by every setup
     vector<setup_block> setups;
 };
@@ -50,6 +52,7 @@ struct setup {
     wstring root;
     wstring notes_folder;
     wstring desktop;
+    int split = 50;                 // the left side's share of the width in percent
     vector<layout_item> items;
 };
 

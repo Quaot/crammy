@@ -145,7 +145,7 @@ void new_setup() {
     }
     // A subject that opened as it was becomes a setup of its own, so both can be listed
     if ( profile->setups.empty() && !profile->items.empty() ) {
-        profile->setups.push_back( { L"Main", L"", L"", profile->items } );
+        profile->setups.push_back( { L"Main", L"", L"", 0, profile->items } );
         profile->items.clear();
     }
     profile->setups.push_back( { answer.name } );

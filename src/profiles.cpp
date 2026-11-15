@@ -13,6 +13,7 @@ const wchar_t *header =
     L"#   root = Downloads\\ECE 150     the folder other paths start from (inside your user folder)\r\n"
     L"#   notes folder = 2 Practice    where \"notes\" keeps answer files (default \"2 Practice\", else root)\r\n"
     L"#   desktop = 150                switch to the virtual desktop with this name first\r\n"
+    L"#   split = 75                   the left side takes 75% of the width (default 50)\r\n"
     L"#\r\n"
     L"# Windows are written as  side = what\r\n"
     L"#   side is left or right, or full for the whole screen. Windows on one side stack top to bottom.\r\n"
@@ -94,12 +95,21 @@ wstring write_item( const written_item &item ) {
     return line + L"\r\n";
 }
 
-wstring write_settings( const wstring &root, const wstring &notes_folder, const wstring &desktop ) {
+wstring write_settings( const wstring &root, const wstring &notes_folder, const wstring &desktop, int split ) {
     wstring text;
     if ( !root.empty() ) text += L"root = " + root + L"\r\n";
     if ( !notes_folder.empty() ) text += L"notes folder = " + notes_folder + L"\r\n";
     if ( !desktop.empty() ) text += L"desktop = " + desktop + L"\r\n";
+    if ( split ) text += L"split = " + std::to_wstring( split ) + L"\r\n";
     return text;
+}
+
+// A split is a whole number from 10 to 90; 0 when the text is anything else
+int read_split( const wstring &text ) {
+    if ( text.empty() || text.size() > 2 ) return 0;
+    for ( wchar_t c : text ) if ( c < L'0' || c > L'9' ) return 0;
+    int value = std::stoi( text );
+    return ( value >= 10 && value <= 90 ) ? value : 0;
 }
 
 setup build_setup( const profile_block &profile, size_t profile_index, int setup_index ) {
@@ -116,6 +126,7 @@ setup build_setup( const profile_block &profile, size_t profile_index, int setup
     else result.notes_folder = result.root;
 
     result.desktop = ( own && !own->desktop.empty() ) ? own->desktop : profile.desktop;
+    result.split = ( own && own->split ) ? own->split : profile.split ? profile.split : 50;
 
     vector<written_item> items = profile.items;
     if ( own ) items.insert( items.end(), own->items.begin(), own->items.end() );
@@ -202,9 +213,15 @@ profile_book read_book( const wstring &text ) {
         if ( key == L"root" ) { profile->root = first_path( value ); continue; }
         if ( key == L"notes folder" ) { ( own ? own->notes_folder : profile->notes_folder ) = first_path( value ); continue; }
         if ( key == L"desktop" ) { ( own ? own->desktop : profile->desktop ) = first_path( value ); continue; }
+        if ( key == L"split" ) {
+            int split = read_split( value );
+            if ( !split ) book.errors.push_back( where + L"split must be a whole number from 10 to 90" );
+            ( own ? own->split : profile->split ) = split;
+            continue;
+        }
 
         if ( key != L"left" && key != L"right" && key != L"full" ) {
-            book.errors.push_back( where + L"unknown setting '" + key + L"' (use root, notes folder, desktop, left, right or full)" );
+            book.errors.push_back( where + L"unknown setting '" + key + L"' (use root, notes folder, desktop, split, left, right or full)" );
             continue;
         }
 
@@ -235,11 +252,11 @@ wstring write_book( const profile_book &book ) {
     wstring text = header;
     for ( const profile_block &profile : book.profiles ) {
         text += L"\r\n\r\n[" + profile.name + L"]\r\n";
-        text += write_settings( profile.root, profile.notes_folder, profile.desktop );
+        text += write_settings( profile.root, profile.notes_folder, profile.desktop, profile.split );
         for ( const written_item &item : profile.items ) text += write_item( item );
         for ( const setup_block &own : profile.setups ) {
             text += L"\r\n[" + profile.name + L": " + own.name + L"]\r\n";
-            text += write_settings( L"", own.notes_folder, own.desktop );
+            text += write_settings( L"", own.notes_folder, own.desktop, own.split );
             for ( const written_item &item : own.items ) text += write_item( item );
         }
     }
