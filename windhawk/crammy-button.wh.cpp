@@ -23,7 +23,7 @@ is drawn in the taskbar's own typeface and text colour, and the buttons stay
 clear when pointed at or pressed. The line is read from Crammy every half
 second, so the name changes soon after a switch to another desktop.
 
-A click on the rows opens the Crammy panel. A click on `▸` goes to that class's
+A click on the rows opens the Crammy panel. A click on `›` goes to that class's
 desktop and opens its slides, as Next does in Crammy. The next button is greyed
 when Next has nothing to open for the class.
 

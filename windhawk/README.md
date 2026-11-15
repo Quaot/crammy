@@ -13,9 +13,11 @@ A click on the rows opens the Crammy panel, because the mod posts the `CrammySho
 3. Press Compile Mod. When it compiles, the mod is switched on, and the line appears on the taskbar.
 4. Press Exit Editing Mode.
 
-To move from an older version, open the mod in Windhawk, press Edit, paste the new `crammy-button.wh.cpp` over the old code, and press Compile Mod again. Version 0.5 adds the desktop box and raises the default `line_width` from 220 to 270 so the box fits. Windhawk keeps a `line_width` already saved by an older version, so after the update the setting still reads 220 until you change it to 270 in the mod's Settings tab.
+To move from an older version, open the mod in Windhawk, press Edit, paste the new `crammy-button.wh.cpp` over the old code, and press Compile Mod again. Windhawk keeps a `line_width` already saved by an older version, so after an update the setting keeps its old value until you change it in the mod's Settings tab. Since version 0.5 the default is 270, so the desktop name fits beside the rows.
 
-The mod has two settings. The first is the path to `crammy.exe`, which starts as `C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe`; change it if Crammy moves. The second, `line_width`, is the widest the whole line may be, `›` included, in pixels at 100% scaling. It starts at 270, wide enough for the desktop box and the rows together. The desktop name and the `›` button always keep their full widths, and the rows get what is left between them. Lower it if the line reaches the Start button, or raise it if the taskbar's buttons are not centred. A row that does not fit ends in an ellipsis.
+Versions worth knowing: 0.5 added the desktop name, 0.6 made the line plain (no coloured box, one weight, a faint `›`, buttons that never turn grey), 0.7 replaces a frozen line left behind by an older load, 0.8 refreshes with a Windows timer, and 0.12 lets that timer reach the rows, so the line follows desktop switches without a reload.
+
+The mod has two settings. The first is the path to `crammy.exe`, which starts as `C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe`; change it if Crammy moves. The second, `line_width`, is the widest the whole line may be, `›` included, in pixels at 100% scaling. It starts at 270, wide enough for the desktop name and the rows together. The desktop name and the `›` button always keep their full widths, and the rows get what is left between them. Lower it if the line reaches the Start button, or raise it if the taskbar's buttons are not centred. A row that does not fit ends in an ellipsis.
 
 ## Switching it off
 
@@ -27,8 +29,8 @@ The mod follows the approach of two published mods by m417z. They are "Taskbar h
 
 A Windows update can rename these functions. If that happens, Windhawk reports that the mod failed to load, and the taskbar stays as Windows made it.
 
-The line is refreshed every 500 milliseconds by a XAML `DispatcherTimer` on the taskbar's own thread. Windows reads another program's window title from its own copy, so a hung Crammy cannot hold up the taskbar.
+The line is refreshed every 500 milliseconds by a Windows timer (`SetTimer` with no window) set on the taskbar's own thread, so its callback runs there and may touch the XAML. A XAML `DispatcherTimer` does not tick in the taskbar's XAML host, which is why versions before 0.8 only changed on a reload. The mod keeps ordinary references to the parts it changes, the desktop name, the two rows and the next button, because weak references to the rows came back empty. Windows reads another program's window title from its own copy, so a hung Crammy cannot hold up the taskbar, and each tick costs a few microseconds.
 
 ## When something goes wrong
 
-In Windhawk, open the mod, go to its Advanced tab and switch on Logging. The mod then writes a line whenever it cannot place the line or reach the taskbar, such as `No taskbar window in this process` or `Could not hook the taskbar thread, error 5`. If the line stays on the taskbar after the mod is switched off, or does not come back after it is switched on, switch the mod off and on again and keep those log lines for whoever fixes it.
+In Windhawk, open the mod, go to its Advanced tab and switch on Logging. Compiling a new version switches Logging off again, so turn it back on after each update. The mod then writes a line whenever it cannot place the line or reach the taskbar, such as `No taskbar window in this process` or `Could not hook the taskbar thread, error 5`. If the line stays on the taskbar after the mod is switched off, or does not come back after it is switched on, switch the mod off and on again and keep those log lines for whoever fixes it.
