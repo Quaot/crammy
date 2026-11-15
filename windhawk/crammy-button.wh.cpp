@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.8
+// @version         0.12
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -81,11 +81,14 @@ struct placed_line {
     winrt::weak_ref<Controls::Grid> panel;
     Controls::Primitives::ButtonBase::Click_revoker text_click;
     Controls::Primitives::ButtonBase::Click_revoker next_click;
-    winrt::weak_ref<Controls::Border> box;
-    winrt::weak_ref<Controls::TextBlock> desktop;
-    winrt::weak_ref<Controls::TextBlock> top;
-    winrt::weak_ref<Controls::TextBlock> bottom;
-    winrt::weak_ref<Controls::Button> next;
+    // The parts the timer changes, held directly: weak references to the two
+    // rows came back empty while the rows were still on screen, so the line
+    // never changed after it was first drawn. restore_all lets go of them.
+    Controls::Border box{ nullptr };
+    Controls::TextBlock desktop{ nullptr };
+    Controls::TextBlock top{ nullptr };
+    Controls::TextBlock bottom{ nullptr };
+    Controls::Button next{ nullptr };
 };
 
 std::wstring g_crammy_path;
@@ -194,15 +197,12 @@ void CALLBACK refresh_all_lines( HWND, UINT, UINT_PTR, DWORD ) {
     }
     try {
         for ( auto &placed : g_lines ) {
-            auto box = placed.box.get();
-            auto desktop = placed.desktop.get();
-            auto top = placed.top.get();
-            auto bottom = placed.bottom.get();
-            auto next = placed.next.get();
-            if ( box && desktop && top && bottom && next ) {
-                refresh_line( box, desktop, top, bottom, next );
+            if ( placed.panel.get() && placed.box && placed.desktop && placed.top && placed.bottom && placed.next ) {
+                refresh_line( placed.box, placed.desktop, placed.top, placed.bottom, placed.next );
             }
         }
+    } catch ( winrt::hresult_error const &error ) {
+        Wh_Log( L"Refreshing the line failed: 0x%08X %s", unsigned( error.code() ), error.message().c_str() );
     } catch ( ... ) {
         Wh_Log( L"Refreshing the line failed" );
     }
@@ -352,6 +352,8 @@ void add_line( Controls::Grid root_grid ) {
     placed.text_click = text_button.Click( winrt::auto_revoke, []( auto &&, auto && ) {
         try {
             show_panel();
+        } catch ( winrt::hresult_error const &error ) {
+            Wh_Log( L"Opening the panel failed: 0x%08X %s", unsigned( error.code() ), error.message().c_str() );
         } catch ( ... ) {
             Wh_Log( L"Opening the panel failed" );
         }
@@ -359,15 +361,17 @@ void add_line( Controls::Grid root_grid ) {
     placed.next_click = next_button.Click( winrt::auto_revoke, []( auto &&, auto && ) {
         try {
             press_next();
+        } catch ( winrt::hresult_error const &error ) {
+            Wh_Log( L"Sending Next failed: 0x%08X %s", unsigned( error.code() ), error.message().c_str() );
         } catch ( ... ) {
             Wh_Log( L"Sending Next failed" );
         }
     } );
-    placed.box = winrt::make_weak( box );
-    placed.desktop = winrt::make_weak( desktop );
-    placed.top = winrt::make_weak( top );
-    placed.bottom = winrt::make_weak( bottom );
-    placed.next = winrt::make_weak( next_button );
+    placed.box = box;
+    placed.desktop = desktop;
+    placed.top = top;
+    placed.bottom = bottom;
+    placed.next = next_button;
     // Reading the title sends Crammy no message, so every half second is cheap,
     // and the desktop name follows a switch soon after it.
     if ( !g_refresh_timer ) {
@@ -407,10 +411,12 @@ bool replace_widgets_unguarded( FrameworkElement widgets ) {
 bool replace_widgets( FrameworkElement widgets ) {
     try {
         return replace_widgets_unguarded( widgets );
+    } catch ( winrt::hresult_error const &error ) {
+        Wh_Log( L"Placing the line failed: 0x%08X %s", unsigned( error.code() ), error.message().c_str() );
     } catch ( ... ) {
         Wh_Log( L"Placing the line failed" );
-        return true;
     }
+    return true;
 }
 
 void restore_all() {
@@ -572,6 +578,8 @@ void apply_on_taskbar( HWND window ) {
         if ( auto xaml_root = taskbar_xaml_root( window ) ) {
             apply_all( xaml_root );
         }
+    } catch ( winrt::hresult_error const &error ) {
+        Wh_Log( L"Placing the line failed: 0x%08X %s", unsigned( error.code() ), error.message().c_str() );
     } catch ( ... ) {
         Wh_Log( L"Placing the line failed" );
     }
@@ -580,6 +588,8 @@ void apply_on_taskbar( HWND window ) {
 void restore_on_taskbar( HWND ) {
     try {
         restore_all();
+    } catch ( winrt::hresult_error const &error ) {
+        Wh_Log( L"Removing the line failed: 0x%08X %s", unsigned( error.code() ), error.message().c_str() );
     } catch ( ... ) {
         Wh_Log( L"Removing the line failed" );
     }
