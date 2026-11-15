@@ -251,27 +251,35 @@ void check_watches() {
     }
 }
 
-// Sets the title from the last line and the given desktop, only when it differs from the one there
-void show_title( int desktop_index ) {
-    if ( !background ) return;
-    wstring desktop;
+// Sets the title from the last line and the given desktop, only when it differs from the one there.
+// Returns false when the desktop's name could not be read, which happens for a moment while Windows switches
+// or makes a desktop; the name shown before is kept then, so the box does not blink off.
+bool show_title( int desktop_index ) {
+    if ( !background ) return false;
+    static wstring last_desktop;
+    bool found = false;
     if ( desktop_index >= 0 ) {
         vector<wstring> names = desktop_names();
-        if ( desktop_index < int( names.size() ) ) desktop = names[desktop_index];
+        if ( desktop_index < int( names.size() ) ) {
+            last_desktop = names[desktop_index];
+            found = true;
+        }
     }
+    const wstring &desktop = last_desktop;
     wstring title = taskbar_title( desktop, last_line, last_next_can_act );
 
     wstring current( GetWindowTextLengthW( background ) + 1, L' ' );
     current.resize( GetWindowTextW( background, &current[0], int( current.size() ) ) );
     if ( current != title ) SetWindowTextW( background, title.c_str() );
+    return found;
 }
 
 // Reads which desktop shows, which is a registry read, and sets the title again only when it changed
 void check_desktop() {
     int index = current_desktop_index();
     if ( index == shown_desktop_index ) return;
-    shown_desktop_index = index;
-    show_title( index );
+    // Remember the index only once its name was read, so a later tick tries again
+    if ( show_title( index ) ) shown_desktop_index = index;
 }
 
 void add_problem( wstring &problem, const wstring &more ) {
@@ -393,8 +401,8 @@ void refresh_line() {
     last_line = line_text( next, at.minute, deck );
     last_next_can_act = next.found && next.known;
     // The names are read again here, so a renamed desktop shows within 10 seconds
-    shown_desktop_index = current_desktop_index();
-    show_title( shown_desktop_index );
+    int index = current_desktop_index();
+    shown_desktop_index = show_title( index ) ? index : -1;
 }
 
 void run_next() {

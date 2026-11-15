@@ -44,7 +44,7 @@ Classes for courses without a folder (GENE 119, MTHEL 99) still show on the line
 
 - Text: course, the kind as three letters (`lec`, `tut`, `lab`, `tst`, `sem`), the room, and `now` or `in Nm` when it starts within 60 minutes, or its start time (`13:30`) otherwise. During ECE 150 lectures, once a deck is open, the deck name follows instead of the room: `ECE 150 lec · 3.02 Linear search`. The one-row form was later replaced by two rows; see **Two rows on the taskbar** under Settled after review.
 - Crammy recomputes the line every 10 seconds and after every Next or next deck, and keeps it as the title of its hidden `CrammyBackground` window.
-- The mod reads that title every two seconds (my call: a timer that reads a window title is the smallest thing that can run in Explorer) and shows it in the taskbar's own font and text colour. No red, cream or engraving on the taskbar itself; the taskbar redesign decides its look.
+- The mod reads that title every two seconds (my call: a timer that reads a window title is the smallest thing that can run in Explorer) and shows it in the taskbar's own font and text colour. No red, cream or engraving on the taskbar itself; the taskbar redesign decides its look. Replaced by **The desktop box** under Settled after review: the mod reads the title every 500 milliseconds and draws the desktop name in red.
 
 ### The mod
 

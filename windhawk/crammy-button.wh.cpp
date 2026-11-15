@@ -223,7 +223,7 @@ Controls::TextBlock make_row() {
 // can be seen at a glance. It starts hidden, until a title with a name is read.
 Controls::Border make_desktop_box( Controls::TextBlock name ) {
     name.FontSize( 14 );
-    name.FontWeight( winrt::Windows::UI::Text::FontWeights::SemiBold() );
+    name.FontWeight( winrt::Windows::UI::Text::FontWeights::Bold() );
     name.Foreground( Media::SolidColorBrush( winrt::Windows::UI::Color{ 255, 0xFF, 0xFF, 0xFF } ) );
     name.TextWrapping( TextWrapping::NoWrap );
     name.VerticalAlignment( VerticalAlignment::Center );
