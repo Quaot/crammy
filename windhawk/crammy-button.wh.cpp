@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.6
+// @version         0.7
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -53,6 +53,7 @@ Switch the mod off to bring the Widgets button back.
 
 #include <windhawk_utils.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -259,11 +260,22 @@ void add_line( Controls::Grid root_grid ) {
         }
         return true;
     } );
-    for ( auto child : root_grid.Children() ) {
-        auto element = child.try_as<FrameworkElement>();
-        if ( element && element.Name() == line_name ) {
+    // A line already in the tree is either this load's, which stays, or one left
+    // behind by an older load whose unload could not reach the taskbar thread.
+    // A left-behind line no longer updates, so it is taken out and replaced.
+    auto children = root_grid.Children();
+    for ( uint32_t i = children.Size(); i > 0; --i ) {
+        auto element = children.GetAt( i - 1 ).try_as<FrameworkElement>();
+        if ( !element || element.Name() != line_name ) {
+            continue;
+        }
+        bool ours = std::any_of( g_lines.begin(), g_lines.end(),
+                                 [&]( placed_line &placed ) { return placed.panel.get() == element; } );
+        if ( ours ) {
             return;
         }
+        Wh_Log( L"Replacing a line left behind by an older load" );
+        children.RemoveAt( i - 1 );
     }
     Controls::TextBlock desktop;
     Controls::Border box = make_desktop_box( desktop );
