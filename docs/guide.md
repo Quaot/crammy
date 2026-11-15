@@ -49,7 +49,7 @@ This is the path through the code, in order:
 3. If the setup has `pick` lines, or a `sequence` line with no saved place, `dialogs.cpp` shows a tick list and returns the PDFs chosen.
 4. `launch.cpp` (`open_setup`) turns each line into a `planned_window`, which says what program to start on which side of the screen with what files. `newest` lines find their file here, and a warning is added when that file is not from today. A `notes` line gets its file name from `files.cpp` (`notes_file`), named after the first PDF of the setup.
 5. `notes_tabs.cpp` (`close_old_notes`) saves and closes, in Notepad++, the notes files Crammy opened for earlier setups.
-6. `desktops.cpp` (`switch_to_desktop`) moves to the setup's virtual desktop if it names one.
+6. `tiling.cpp` (`open_windows_on_desktop`) opens the windows and moves each one to the setup's desktop with `move_window_to_desktop` as it appears, then `desktops.cpp` (`switch_to_desktop`) shows that desktop once. `open_setups` does the same for several setups in one run, with one notes clean-up for all of them.
 7. `tiling.cpp` (`open_windows`) starts every program, finds each new window, moves it to its place, and snaps the windows that have a side to themselves.
 8. `launch.cpp` (`save_places`) adds the decks opened for a `sequence` line to the setup's record in `decks today.txt`, and saves the highest of them as the setup's place in `places.txt`.
 
@@ -72,7 +72,8 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/files.cpp` | Finding PDFs, spotting answer keys, the `newest` pattern, naming notes files |
 | `src/launch.cpp` | Turning a setup into windows to open |
 | `src/tiling.cpp` | Starting programs, finding their windows, moving and snapping them; small helpers shared with other files |
-| `src/notes_tabs.cpp` | Closing old notes tabs in Notepad++ |
+| `src/notes_tabs.cpp` | Closing old notes in every Notepad++ window |
+| `src/command_line.cpp` | Reading the command line, including several `--setup` groups |
 | `src/desktops.cpp` | Reading virtual desktop names, switching between them, finding which desktop each window is on, and creating a desktop |
 | `src/timetable.cpp` | Reading `timetable.txt` and working out which classes meet on a date, with the date and weekday helpers |
 | `src/settings.cpp` | Reading and writing `settings.txt` and the shortcut text, and building the command that starts Youtonomous |
@@ -84,7 +85,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
 | `tests/check.cpp`, `tests/check.h` | `check()`, which prints one line and counts a failure |
-| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line` and `slide_watch` |
+| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch` and `desktop_setups` |
 | `tests/specs/*.md` | One spec for each area |
 | `tests/test.cmd` | Builds the checks and runs them |
 | `windhawk/crammy-button.wh.cpp` | The Windhawk mod that shows Crammy's line in two rows and the `▸` next button on the taskbar; `windhawk/README.md` says how to add it |
@@ -123,7 +124,7 @@ To add a setting or a kind, change `profiles.h` (the structs), `read_book` and `
 |---|---|---|
 | PdfCraft | `pdfcraft.exe --new-window "a.pdf" "b.pdf"` (several files give tabs in one window); a window Next opens for lecture decks also gets `--control <file>` | the process ID of the program started |
 | Acrobat | `Acrobat.exe /n "file.pdf"` (`/n` forces a new window) | a title containing the file name and "Adobe Acrobat"; `/n` hands off to another process, so the ID cannot be used |
-| Notepad++ | `notepad++.exe "file.txt"` (opens a tab in the running copy) | a title containing the file name and "Notepad++" |
+| Notepad++ | `notepad++.exe -multiInst -nosession "file.txt"` (a window of its own, from `notepad_command`) | a title containing the file name and "Notepad++" |
 | File Explorer | `explorer.exe "folder"` | window class `CabinetWClass` and the folder name in the title |
 
 The program paths are in `program_file` in `tiling.cpp`. Each side of the work area is split into equal rows for the windows on it. Windows 11 draws invisible borders around windows, so sizes use the visible frame from `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)`.
@@ -138,7 +139,7 @@ A window with a side to itself is then snapped by pressing Win+Left or Win+Right
 
 ## Desktops
 
-**Reading and switching.** Windows keeps the desktops in the registry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops`: `VirtualDesktopIDs` lists them in order, `CurrentVirtualDesktop` is the one showing, and each name is under `Desktops\{id}\Name`. An unnamed desktop is called "Desktop 2" and so on. `desktop_names` and `current_desktop_index` read this. `switch_to_desktop` jumps straight to the desktop with `SwitchDesktop` on Explorer's internal interface (see Creating and naming, below), so going from Main to 198 is one move. If that interface cannot be reached, it presses Ctrl+Win+Left or Right as many times as needed instead. Either way it waits until the registry shows the new desktop. Moving another program's windows between desktops needs undocumented calls that change between Windows updates, which is why Crammy switches first and opens afterwards.
+**Reading and switching.** Windows keeps the desktops in the registry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops`: `VirtualDesktopIDs` lists them in order, `CurrentVirtualDesktop` is the one showing, and each name is under `Desktops\{id}\Name`. An unnamed desktop is called "Desktop 2" and so on. `desktop_names` and `current_desktop_index` read this. `switch_to_desktop` jumps straight to the desktop with `SwitchDesktop` on Explorer's internal interface (see Creating and naming, below), so going from Main to 198 is one move. If that interface cannot be reached, it presses Ctrl+Win+Left or Right as many times as needed instead. Either way it waits until the registry shows the new desktop. **Moving windows.** `move_window_to_desktop` moves any program's window with `MoveViewToDesktop` on the same internal interface, after getting the window's view from Explorer's undocumented `IApplicationViewCollection` (IID 1841C6D7-4F9D-42C0-AF41-8747538F10E5, slot 3 `GetViewForHwnd`, from the same `VirtualDesktop11-24H2.cs`). It checks the result with the documented `GetWindowDesktopId`. These calls can change between Windows updates, and `tests/test_desktop_setups.cpp` fails when they do.
 
 **Windows on each desktop.** `windows_by_desktop` lists the top-level windows that are visible and have a title. Windows with an owner are left out. For each one it asks the documented `IVirtualDesktopManager::GetWindowDesktopId` and matches the answer to the ids in the registry. Windows whose desktop cannot be found are left out. Explorer does not track some windows on any desktop, such as tool windows (`WS_EX_TOOLWINDOW`) and windows that cannot be activated (`WS_EX_NOACTIVATE`), so these never appear. A test that needs a window on a desktop must make an ordinary application window.
 

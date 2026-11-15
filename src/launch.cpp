@@ -127,23 +127,75 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
     return plan;
 }
 
-vector<opened_window> open_plan( const setup &chosen, const vector<planned_window> &plan, vector<wstring> &problems ) {
+static vector<wstring> make_notes_files( const vector<planned_window> &plan ) {
     vector<wstring> notes_paths;
     for ( const planned_window &window : plan ) {
         if ( window.app != program::notepad_pp ) continue;
         create_notes_file( window.paths[0] );
         notes_paths.push_back( window.paths[0] );
     }
+    return notes_paths;
+}
 
-    // Save and close the notes tabs from earlier setups, so Notepad++ does not fill up with them
+static bool desktop_exists( const wstring &name ) {
+    for ( const wstring &each : desktop_names() ) if ( lower( each ) == lower( name ) ) return true;
+    return false;
+}
+
+// Opens the plan on the setup's desktop. When that desktop is not the one showing, the windows
+// are moved there as they appear, so the desktop showing stays the same.
+static vector<opened_window> open_on_its_desktop( const setup &chosen, const vector<planned_window> &plan,
+                                                  vector<wstring> &problems ) {
+    const wstring &desktop = chosen.desktop;
+    if ( desktop.empty() || lower( desktop ) == lower( current_desktop_name() ) ) return open_windows_recorded( plan, problems );
+    if ( !desktop_exists( desktop ) ) {
+        problems.push_back( L"There is no desktop named '" + desktop + L"', so the windows opened on this one." );
+        return open_windows_recorded( plan, problems );
+    }
+    return open_windows_on_desktop( plan, desktop, problems );
+}
+
+static void show_desktop( const wstring &desktop, vector<wstring> &problems ) {
+    if ( desktop.empty() || !desktop_exists( desktop ) || lower( desktop ) == lower( current_desktop_name() ) ) return;
+    wstring problem = switch_to_desktop( desktop );
+    if ( !problem.empty() ) problems.push_back( problem );
+}
+
+vector<opened_window> open_plan( const setup &chosen, const vector<planned_window> &plan, vector<wstring> &problems ) {
+    vector<wstring> notes_paths = make_notes_files( plan );
+
+    // Save and close the notes from earlier setups, so old Notepad++ windows do not pile up
     close_old_notes( notes_paths );
     for ( const wstring &path : notes_paths ) remember_notes( path );
 
-    if ( !chosen.desktop.empty() ) {
-        wstring problem = switch_to_desktop( chosen.desktop );
-        if ( !problem.empty() ) problems.push_back( problem );
+    vector<opened_window> opened = open_on_its_desktop( chosen, plan, problems );
+    show_desktop( chosen.desktop, problems );
+    return opened;
+}
+
+vector<wstring> open_setups( const vector<setup_to_open> &setups ) {
+    vector<wstring> problems;
+    vector<vector<planned_window>> plans;
+    vector<wstring> notes_paths;
+    for ( const setup_to_open &each : setups ) {
+        plans.push_back( plan_setup( *each.chosen, each.picks, each.separate, problems ) );
+        for ( const wstring &path : make_notes_files( plans.back() ) ) notes_paths.push_back( path );
     }
-    return open_windows_recorded( plan, problems );
+
+    // One clean-up for all of them, so no setup closes the notes of another opened now
+    close_old_notes( notes_paths );
+    for ( const wstring &path : notes_paths ) remember_notes( path );
+
+    wstring first_desktop;
+    for ( size_t i = 0; i < setups.size(); ++i ) {
+        if ( plans[i].empty() ) continue;
+        vector<opened_window> opened = open_on_its_desktop( *setups[i].chosen, plans[i], problems );
+        wstring problem = save_places( *setups[i].chosen, opened );
+        if ( !problem.empty() ) problems.push_back( problem );
+        if ( first_desktop.empty() ) first_desktop = setups[i].chosen->desktop;
+    }
+    show_desktop( first_desktop, problems );
+    return problems;
 }
 
 static bool same_path( const wstring &a, const wstring &b ) {

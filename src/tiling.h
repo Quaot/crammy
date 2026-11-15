@@ -23,6 +23,9 @@ void press_keys( std::initializer_list<unsigned short> keys );
 
 DWORD start_process( wstring command_line );
 wstring quoted( const wstring &text );
+
+// The command line that starts Notepad++ on one file, in a window of its own.
+wstring notepad_command( const wstring &path );
 vector<HWND> top_windows();
 wstring title_of( HWND hwnd );
 bool bring_to_front( HWND hwnd );
@@ -42,6 +45,12 @@ struct opened_window {
 // open_windows, and also says which window shows which file: one entry for each path of each
 // window that appeared. problems gets a message for each window that never appeared.
 vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems );
+
+// Opens the windows on the desktop with this name while the desktop showing stays the same.
+// Each window is moved there as soon as it appears, then sized to its side without pressing
+// keys or taking the focus. problems also gets a message for each window that could not move.
+vector<opened_window> open_windows_on_desktop( const vector<planned_window> &plan, const wstring &desktop,
+                                              vector<wstring> &problems );
 
 // Opens one window over the frame old_window has now. It only moves the window there: it
 // presses no keys and leaves the focus where it is.

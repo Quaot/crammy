@@ -251,3 +251,72 @@ bool create_desktop( const wstring &name, wstring &problem ) {
     problem = L"A new desktop was made, but it needs the name " + name + L". Right-click it in Task View and choose Rename.";
     return true;
 }
+
+// Explorer's undocumented IApplicationViewCollection, IID 1841C6D7-4F9D-42C0-AF41-8747538F10E5,
+// taken from the same VirtualDesktop11-24H2.cs. Only the first four slots are used:
+//   0 GetViews, 1 GetViewsByZOrder, 2 GetViewsByAppUserModelId, 3 GetViewForHwnd
+// Like desktop_manager_internal, it sits outside the anonymous namespace so GCC keeps the calls through it.
+const IID iid_view_collection = { 0x1841C6D7, 0x4F9D, 0x42C0, { 0xAF, 0x41, 0x87, 0x47, 0x53, 0x8F, 0x10, 0xE5 } };
+
+struct application_view_collection : IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE get_views( IUnknown ** ) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_views_by_z_order( IUnknown ** ) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_views_by_app_user_model_id( const wchar_t *, IUnknown ** ) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_view_for_hwnd( HWND, IUnknown ** ) = 0;
+};
+
+namespace {
+
+// The id of the desktop a window is on, or "" when Windows does not say
+wstring desktop_of( HWND window ) {
+    IVirtualDesktopManager *manager = nullptr;
+    if ( FAILED( CoCreateInstance( clsid_desktop_manager, nullptr, CLSCTX_ALL, iid_desktop_manager,
+                                   reinterpret_cast<void **>( &manager ) ) ) )
+        return L"";
+    GUID id;
+    wstring result = SUCCEEDED( manager->GetWindowDesktopId( window, &id ) )
+                         ? guid_text( reinterpret_cast<const BYTE *>( &id ) ) : L"";
+    manager->Release();
+    return result;
+}
+
+}  // namespace
+
+wstring move_window_to_desktop( HWND window, const wstring &name ) {
+    if ( !window || !IsWindow( window ) ) return L"That window is gone, so it could not be moved.";
+
+    vector<wstring> ids = desktop_ids();
+    vector<wstring> names = desktop_names();
+    int target = -1;
+    for ( size_t i = 0; i < names.size(); ++i ) {
+        if ( lower( names[i] ) == lower( name ) ) target = static_cast<int>( i );
+    }
+    if ( target < 0 ) return L"There is no desktop named '" + name + L"'.";
+
+    com_session com;
+    if ( lower( desktop_of( window ) ) == lower( ids[target] ) ) return L"";
+
+    GUID guid;
+    if ( FAILED( CLSIDFromString( ids[target].c_str(), &guid ) ) ) return L"Could not read the id of desktop '" + name + L"'.";
+
+    IServiceProvider *shell = nullptr;
+    if ( FAILED( CoCreateInstance( clsid_immersive_shell, nullptr, CLSCTX_LOCAL_SERVER, IID_IServiceProvider,
+                                   reinterpret_cast<void **>( &shell ) ) ) )
+        return L"Could not reach Explorer to move a window to desktop '" + name + L"'.";
+    desktop_manager_internal *manager = nullptr;
+    application_view_collection *views = nullptr;
+    IUnknown *view = nullptr, *desktop = nullptr;
+    bool moved = SUCCEEDED( shell->QueryService( sid_desktop_manager_internal, iid_desktop_manager_internal, reinterpret_cast<void **>( &manager ) ) ) &&
+                 SUCCEEDED( shell->QueryService( iid_view_collection, iid_view_collection, reinterpret_cast<void **>( &views ) ) ) &&
+                 SUCCEEDED( views->get_view_for_hwnd( window, &view ) ) && view &&
+                 SUCCEEDED( manager->find_desktop( &guid, &desktop ) ) && desktop &&
+                 SUCCEEDED( manager->move_view_to_desktop( view, desktop ) );
+    if ( desktop ) desktop->Release();
+    if ( view ) view->Release();
+    if ( views ) views->Release();
+    if ( manager ) manager->Release();
+    shell->Release();
+
+    if ( moved && lower( desktop_of( window ) ) == lower( ids[target] ) ) return L"";
+    return L"Could not move a window to desktop '" + name + L"'.";
+}

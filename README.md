@@ -10,20 +10,21 @@ To build a setup, press New setup, then drag PDFs or folders from File Explorer 
 
 Edit as text opens `profiles.txt` in a small editor for anything the picture does not cover.
 
-Notes open in Notepad++. Each time a setup opens, Crammy saves and closes the notes tabs it opened before, using commands Notepad++ accepts from other programs, so nothing comes to the front and no keys are pressed. Tabs you opened yourself stay open.
+Notes open in Notepad++, in a window of their own, so each desktop gets its own notes. Each time a setup opens, Crammy saves and closes the notes it opened before, using commands Notepad++ accepts from other programs, so nothing comes to the front and no keys are pressed. A notes window with nothing else in it closes whole. Files you opened yourself stay open.
 
 It also runs from a terminal:
 
 ```
 crammy --setup "ECE 150: Exam" --pick F24-F
 crammy --setup "Math 115: Exam" --pick F23-F F23-M --separate
+crammy --setup "Math 115: Exam" --pick Mock-1113 --setup "Math 117: Exam" --pick Mock-1113
 crammy --list
 crammy --list "ECE 150: Exam"
 crammy --check
 crammy --edit
 ```
 
-`--pick` takes the PDF with that exact name, or else the newest one whose name contains the text. It also works on a `sequence` line, to open a chosen deck in place of the next one. `--separate` gives each picked PDF its own window.
+`--pick` takes the PDF with that exact name, or else the newest one whose name contains the text. It also works on a `sequence` line, to open a chosen deck in place of the next one. `--separate` gives each picked PDF its own window. `--setup` can be given more than once, each with its own `--pick`: every setup opens on its own desktop in one go, and the desktop of the first one shows at the end.
 
 ## The panel
 
@@ -86,7 +87,7 @@ A side is `left` or `right`, or `full` for the whole screen. When several window
 
 Ending a PDF line with `with acrobat` opens it in Adobe Acrobat in place of PdfCraft. Paths start from the root unless they are absolute. `*` matches any text in a file name, and variables such as `%USERPROFILE%` are expanded. Answer files go in `2 Practice` when the course has one. Set `notes folder = ...` to change that.
 
-`desktop = 150` switches to the virtual desktop named 150 before anything opens, so each subject can keep its own desktop. Crammy goes straight to that desktop in one move and reads the desktop names from the registry.
+`desktop = 150` puts the setup's windows on the virtual desktop named 150, so each subject can keep its own desktop. The windows open on the desktop showing and move there as soon as they appear, so nothing switches while they open. Once they are in place, Crammy shows that desktop in one move. It reads the desktop names from the registry.
 
 A setup starts with every line of its profile, so lines shared by all setups can go under the profile heading.
 

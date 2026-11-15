@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <set>
 
+#include "desktops.h"
+
 void press_keys( std::initializer_list<unsigned short> keys ) {
     vector<INPUT> inputs;
     for ( WORD key : keys ) {
@@ -50,6 +52,10 @@ wstring quoted( const wstring &text ) {
     return L"\"" + text + L"\"";
 }
 
+wstring notepad_command( const wstring &path ) {
+    return quoted( program_file( program::notepad_pp ) ) + L" -multiInst -nosession " + quoted( path );
+}
+
 vector<HWND> top_windows() {
     vector<HWND> windows;
     EnumWindows( []( HWND hwnd, LPARAM list ) -> BOOL {
@@ -87,6 +93,7 @@ struct live_window {
     int rows = 1;               // windows sharing this side
     DWORD process_id = 0;
     HWND hwnd = nullptr;
+    bool on_desktop = false;    // moved to the desktop asked for, or no desktop was asked for
 };
 
 
@@ -188,7 +195,10 @@ RECT side_area( const wstring &side, const RECT &screen ) {
 
 // Starts every window, then moves each one to its part of the screen.
 // With a frame, every window is only moved to that frame: no keys are pressed and the focus stays.
-vector<live_window> start_and_place( const vector<planned_window> &plan, const RECT *frame = nullptr ) {
+// With a desktop, each window is moved there as soon as it appears and is then sized quietly,
+// as with a frame, since keys and focus would act on the desktop showing.
+vector<live_window> start_and_place( const vector<planned_window> &plan, const RECT *frame = nullptr,
+                                     const wstring &desktop = L"", vector<wstring> *problems = nullptr ) {
     RECT screen;
     SystemParametersInfoW( SPI_GETWORKAREA, 0, &screen, 0 );
 
@@ -223,7 +233,7 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
         } else if ( window.plan.app == program::acrobat ) {
             start_process( quoted( acrobat_exe ) + L" /n " + quoted( window.plan.paths[0] ) );   // /n: a new window
         } else if ( window.plan.app == program::notepad_pp ) {
-            start_process( quoted( program_file( program::notepad_pp ) ) + L" " + quoted( window.plan.paths[0] ) );
+            start_process( notepad_command( window.plan.paths[0] ) );
         } else {
             start_process( L"explorer.exe " + quoted( window.plan.paths[0] ) );
         }
@@ -241,9 +251,14 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
                 window.hwnd = find_window( window, taken );
                 if ( window.hwnd ) taken.insert( window.hwnd );
             }
+            if ( window.hwnd && !window.on_desktop ) {
+                wstring problem = desktop.empty() ? L"" : move_window_to_desktop( window.hwnd, desktop );
+                if ( !problem.empty() && problems ) problems->push_back( problem );
+                window.on_desktop = true;
+            }
             if ( !window.hwnd ) { settled = false; continue; }
             if ( !is_in_place( window.hwnd, window.target ) ) {
-                move_window( window.hwnd, window.target, frame != nullptr );
+                move_window( window.hwnd, window.target, frame != nullptr || !desktop.empty() );
                 settled = false;
             }
         }
@@ -251,7 +266,7 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
         Sleep( 100 );
     }
 
-    if ( frame ) return windows;
+    if ( frame || !desktop.empty() ) return windows;
 
     // Snap the left side first, so the right side fills the space next to it.
     // A window that did not snap into place is put there directly instead.
@@ -292,6 +307,11 @@ vector<opened_window> recorded( const vector<live_window> &windows, vector<wstri
 
 vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems ) {
     return recorded( start_and_place( plan ), problems );
+}
+
+vector<opened_window> open_windows_on_desktop( const vector<planned_window> &plan, const wstring &desktop,
+                                              vector<wstring> &problems ) {
+    return recorded( start_and_place( plan, nullptr, desktop, &problems ), problems );
 }
 
 vector<opened_window> open_window_in_place_of( const planned_window &window, HWND old_window, vector<wstring> &problems ) {

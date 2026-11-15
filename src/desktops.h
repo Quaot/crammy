@@ -26,6 +26,10 @@ struct window_on_desktop {
 // Visible, titled, unowned top-level windows, each with its desktop.
 vector<window_on_desktop> windows_by_desktop();
 
+// Moves a top-level window to the desktop with this name, without showing that desktop.
+// Returns "" when the window is on that desktop afterwards, or what went wrong.
+wstring move_window_to_desktop( HWND window, const wstring &name );
+
 // Makes a new desktop with this name at the end of the list. problem says what went wrong, or
 // what still needs doing when the name could not be set.
 bool create_desktop( const wstring &name, wstring &problem );

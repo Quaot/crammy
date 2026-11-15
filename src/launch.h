@@ -23,7 +23,8 @@ bool needs_ticks( const setup &chosen, const layout_item &item );
 vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
                                    vector<wstring> &problems );
 
-// Creates the notes files, closes old notes tabs, switches to the setup's desktop and opens the plan.
+// Creates the notes files and closes old notes, then opens the plan on the setup's desktop without
+// showing it first, and shows that desktop once the windows are in place.
 // Returns which window shows which file; problems gets what went wrong.
 vector<opened_window> open_plan( const setup &chosen, const vector<planned_window> &plan, vector<wstring> &problems );
 
@@ -45,6 +46,16 @@ extern const wchar_t *decks_today_problem;  // what to show when save_decks_toda
 // as the setup's place. Returns decks_today_problem or place_problem when one could not be
 // saved, otherwise "".
 wstring save_places( const setup &chosen, const vector<opened_window> &opened );
+
+struct setup_to_open {
+    const setup *chosen;
+    vector<vector<wstring>> picks;   // as for open_setup
+    bool separate;
+};
+
+// Opens each setup on its own desktop while the desktop showing stays the same, then shows
+// the desktop of the first setup that names one. Returns problems to show.
+vector<wstring> open_setups( const vector<setup_to_open> &setups );
 
 // picks[i] holds the PDFs ticked for setup item i (pick items, and sequence items when not empty).
 // separate puts each picked PDF in its own PdfCraft window.

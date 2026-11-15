@@ -11,6 +11,7 @@ namespace {
 // They work on its window directly: nothing comes to the front and no keys are pressed.
 const UINT npp_message = WM_USER + 1000;
 const UINT npp_open_file_count = npp_message + 7;
+const UINT npp_current_doc_index = npp_message + 23;   // -1 for a view that is not showing
 const UINT npp_switch_to_tab = npp_message + 28;
 const UINT npp_save_tab = npp_message + 38;
 const UINT npp_menu_command = npp_message + 48;
@@ -69,23 +70,34 @@ void remember_notes( const wstring &path ) {
     write_list( paths );
 }
 
-void close_old_notes( const vector<wstring> &keep, HWND window ) {
-    vector<wstring> paths = read_list();
-    if ( !window ) window = FindWindowW( L"Notepad++", nullptr );
-    if ( paths.empty() || !window ) {   // with Notepad++ closed, no tabs are left to close
-        if ( !window ) write_list( {} );
+// Saves and closes the old notes in one Notepad++ window. A window holding only an old notes
+// file closes whole. Adds the remembered files left open there to still_open.
+static void close_in_window( HWND window, const vector<wstring> &paths, const vector<wstring> &keep,
+                             vector<wstring> &still_open ) {
+    int main_count = int( SendMessageW( window, npp_open_file_count, 0, 1 ) );
+    // The second view always holds one empty document, even while it is hidden
+    bool second_showing = int( SendMessageW( window, npp_current_doc_index, 0, second_view ) ) >= 0;
+    int second_count = second_showing ? int( SendMessageW( window, npp_open_file_count, 0, 2 ) ) : 0;
+
+    if ( main_count + second_count == 1 ) {
+        wstring path = shown_file( window );
+        if ( !listed( paths, path ) ) return;
+        if ( listed( keep, path ) ) { still_open.push_back( path ); return; }
+        SendMessageW( window, npp_save_tab, 0, 0 );
+        if ( starts_with( title_of( window ), L"*" ) ) { still_open.push_back( path ); return; }
+        PostMessageW( window, WM_CLOSE, 0, 0 );
         return;
     }
 
     wstring was_showing = shown_file( window );
-    vector<wstring> still_open;
     for ( WPARAM view : { main_view, second_view } ) {
-        int count = int( SendMessageW( window, npp_open_file_count, 0, view == main_view ? 1 : 2 ) );
+        int count = view == main_view ? main_count : second_count;
         // Going from the last tab back means closing one does not move the ones still to check
         for ( int tab = count - 1; tab >= 0; --tab ) {
             SendMessageW( window, npp_switch_to_tab, view, tab );
             wstring path = shown_file( window );
-            if ( !listed( paths, path ) || listed( keep, path ) ) continue;
+            if ( !listed( paths, path ) ) continue;
+            if ( listed( keep, path ) ) { still_open.push_back( path ); continue; }
 
             SendMessageW( window, npp_save_tab, 0, 0 );
             if ( starts_with( title_of( window ), L"*" ) || !is_file_shown( window, path ) ) {
@@ -96,8 +108,6 @@ void close_old_notes( const vector<wstring> &keep, HWND window ) {
         }
     }
 
-    write_list( still_open );
-
     // Put back the tab that was showing before, if it is still open
     for ( WPARAM view : { main_view, second_view } ) {
         int count = int( SendMessageW( window, npp_open_file_count, 0, view == main_view ? 1 : 2 ) );
@@ -106,4 +116,28 @@ void close_old_notes( const vector<wstring> &keep, HWND window ) {
             if ( lower( shown_file( window ) ) == lower( was_showing ) ) return;
         }
     }
+}
+
+static vector<HWND> notepad_windows() {
+    vector<HWND> windows;
+    EnumWindows( []( HWND hwnd, LPARAM list ) -> BOOL {
+        wchar_t class_name[32] = {};
+        GetClassNameW( hwnd, class_name, 32 );
+        if ( wstring( class_name ) == L"Notepad++" ) reinterpret_cast<vector<HWND> *>( list )->push_back( hwnd );
+        return TRUE;
+    }, reinterpret_cast<LPARAM>( &windows ) );
+    return windows;
+}
+
+void close_old_notes( const vector<wstring> &keep, HWND window ) {
+    vector<wstring> paths = read_list();
+    vector<HWND> windows = window ? vector<HWND>{ window } : notepad_windows();
+    if ( paths.empty() || windows.empty() ) {   // with Notepad++ closed, no tabs are left to close
+        if ( windows.empty() ) write_list( {} );
+        return;
+    }
+
+    vector<wstring> still_open;
+    for ( HWND each : windows ) close_in_window( each, paths, keep, still_open );
+    write_list( still_open );
 }
