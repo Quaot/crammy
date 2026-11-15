@@ -294,7 +294,10 @@ wstring move_window_to_desktop( HWND window, const wstring &name ) {
     if ( target < 0 ) return L"There is no desktop named '" + name + L"'.";
 
     com_session com;
-    if ( lower( desktop_of( window ) ) == lower( ids[target] ) ) return L"";
+    wstring now_on = desktop_of( window );
+    if ( now_on.empty() || now_on == L"{00000000-0000-0000-0000-000000000000}" )
+        return L"The window for desktop '" + name + L"' is not on any desktop yet, so it could not be moved.";
+    if ( lower( now_on ) == lower( ids[target] ) ) return L"";
 
     GUID guid;
     if ( FAILED( CLSIDFromString( ids[target].c_str(), &guid ) ) ) return L"Could not read the id of desktop '" + name + L"'.";
