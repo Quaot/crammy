@@ -1,6 +1,6 @@
 # Crammy button
 
-`crammy-button.wh.cpp` is a Windhawk mod for the Windows 11 taskbar. It hides the Widgets button, which shows the weather at the left end of the taskbar. In its place it puts Crammy's line in two small rows, as the weather showed its temperature over its condition. The top row names the next class, such as `MATH 117 tut`, and the bottom row, a little dimmer, says where and when, such as `Mon 08:30 · DWE 1515`. A `▸` next button sits to the right of the rows, centred on their height. The rows and the button are drawn in the taskbar's own typeface and text colour, with the rows in a smaller size.
+`crammy-button.wh.cpp` is a Windhawk mod for the Windows 11 taskbar. It hides the Widgets button, which shows the weather at the left end of the taskbar. In its place it puts Crammy's line in two small rows, as the weather showed its temperature over its condition. The top row names the next class, such as `MATH 117 Tutorial`, and the bottom row, a little dimmer, says where and when, such as `Mon 08:30 · DWE 1515`. A `▸` next button sits to the right of the rows, centred on their height. The rows and the button are drawn in the taskbar's own typeface and text colour, with the rows in a smaller size.
 
 Crammy keeps the line as the title of its hidden `CrammyBackground` window, with a newline between the two rows, and the mod reads that title every two seconds. A title with no newline, such as `No classes`, is shown as the top row alone. A title that starts with `-` means Next has nothing to open for that class, so the mod shows the line without the `-` and greys the next button.
 
@@ -28,3 +28,7 @@ The mod follows the approach of two published mods by m417z. They are "Taskbar h
 A Windows update can rename these functions. If that happens, Windhawk reports that the mod failed to load, and the taskbar stays as Windows made it.
 
 The line is refreshed by a XAML `DispatcherTimer` on the taskbar's own thread. Windows reads another program's window title from its own copy, so a hung Crammy cannot hold up the taskbar.
+
+## When something goes wrong
+
+In Windhawk, open the mod, go to its Advanced tab and switch on Logging. The mod then writes a line whenever it cannot place the line or reach the taskbar, such as `No taskbar window in this process` or `Could not hook the taskbar thread, error 5`. If the line stays on the taskbar after the mod is switched off, or does not come back after it is switched on, switch the mod off and on again and keep those log lines for whoever fixes it.
