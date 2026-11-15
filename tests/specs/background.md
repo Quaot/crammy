@@ -47,6 +47,10 @@ bool ask_running_crammy_for_next();     // posts next_message() to the CrammyBac
 // The title Crammy gives its hidden window: the line, with "-" in front when Next would do nothing.
 wstring background_title( const wstring &line, bool next_can_act );
 
+// The whole title: the current desktop's name, a tab, then the line, with "-" in front of it all when Next
+// would do nothing. The desktop name is cut to 12 characters. With no desktop name it is background_title( line ).
+wstring taskbar_title( const wstring &desktop, const wstring &line, bool next_can_act );
+
 struct recorded_window {
     wstring path;   // the file the window shows
     bool alive;     // the window still exists
@@ -71,6 +75,21 @@ bool watch_has_ended( calendar_date started, calendar_date today );
 - `background_title( L"GENE 119 sem · STC 0050 · 10:30", false )` is `-GENE 119 sem · STC 0050 · 10:30`.
 - `background_title( L"No classes", false )` is `-No classes`.
 
+**The title with the desktop**
+
+The tab is U+0009. The middle dot is U+00B7, the newline U+000A and the ellipsis U+2026.
+
+- `taskbar_title( L"150", L"ECE 150 Lecture
+PSE 5353 · in 5m", true )` is `150`, a tab, then `ECE 150 Lecture
+PSE 5353 · in 5m`.
+- `taskbar_title( L"Main", L"GENE 119 Seminar
+STC 0050 · 10:30", false )` is `-Main`, a tab, then the line: the dash goes in front of the desktop name.
+- `taskbar_title( L"", L"No classes", false )` is `-No classes`, the same as `background_title( L"No classes", false )`, with no tab.
+- `taskbar_title( L"", L"MATH 117 Tutorial
+DWE 1515 · 08:30", true )` is the line unchanged.
+- A desktop name of 12 characters or fewer is kept whole: `taskbar_title( L"Bakfiets", L"X", true )` starts with `Bakfiets` and a tab.
+- A longer name is cut to its first 11 characters followed by the ellipsis, 12 in all: `taskbar_title( L"Desktop number 12", L"X", true )` is `Desktop num…`, a tab, then `X`.
+
 **Already open**
 
 - Files `{ C:\a\L23.pdf }` with windows `{ (c:\A\l23.PDF, alive) }` → true.
@@ -87,5 +106,5 @@ bool watch_has_ended( calendar_date started, calendar_date today );
 
 ## Window behaviour, checked by the owner
 
-- The hidden window's title is `background_title` of the current line, set at start, every 10 seconds and after every Next or next deck.
+- The hidden window's title is `taskbar_title` of the current desktop's name (from `desktop_names` and `current_desktop_index`) and the current line. Crammy works the line out at start, every 10 seconds and after every Next or next deck, and checks the current desktop every 500 milliseconds, setting the title again as soon as the desktop changes. The title is only set when it differs from the one already there.
 - A second Next while the first is still opening windows, or while the tick list is open, is ignored.
