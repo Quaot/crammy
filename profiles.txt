@@ -6,6 +6,7 @@
 #   root = Downloads\ECE 150     the folder other paths start from (inside your user folder)
 #   notes folder = 2 Practice    where "notes" keeps answer files (default "2 Practice", else root)
 #   desktop = 150                switch to the virtual desktop with this name first
+#   split = 75                   the left side takes 75% of the width (default 50)
 #
 # Windows are written as  side = what
 #   side is left or right, or full for the whole screen. Windows on one side stack top to bottom.
@@ -16,6 +17,7 @@
 #   newest "Lec*.pdf"           the newest PDF whose name fits; * matches any text
 #   tabs "a.pdf" "b.pdf"        one PdfCraft window, one tab per PDF
 #   pick "folder" "file"        tick PDFs from these each time you open the setup
+#   sequence "folder"           the next numbered lecture deck in that folder, after the one last opened
 #   folder "folder"             File Explorer on that folder
 #
 # Add  with acrobat  at the end of a PDF line to open it in Adobe Acrobat in place of PdfCraft.
@@ -80,10 +82,9 @@ full = pick "."
 root = Downloads\ENGL 192
 desktop = 192
 
-[ENGL 192: Worksheet]
+[ENGL 192: Assignment: Technical Report]
 split = 60
-left = pick "2 Practice" "3 Assignments"
-right = notes
+left = pdf "3 Assignments\PDF\ENGL192-A2-A3-Spec.pdf"
 
 [ENGL 192: Lecture]
 full = newest "1 Lectures\ENGL192-W*-Slides.pdf"
