@@ -166,6 +166,21 @@ void check_the_title() {
     check( background_title( L"No classes", false ) == L"-No classes", "No classes gets a dash in front when Next cannot act." );
 }
 
+void check_the_title_with_the_desktop() {
+    check( taskbar_title( L"150", L"ECE 150 Lecture\nPSE 5353 · in 5m", true ) == L"150\tECE 150 Lecture\nPSE 5353 · in 5m",
+           "The taskbar title is the desktop name, a tab and the line when Next can act." );
+    check( taskbar_title( L"Main", L"GENE 119 Seminar\nSTC 0050 · 10:30", false ) == L"-Main\tGENE 119 Seminar\nSTC 0050 · 10:30",
+           "The dash goes in front of the desktop name when Next would do nothing." );
+    check( taskbar_title( L"", L"No classes", false ) == L"-No classes", "With no desktop name and Next unable to act, the title is the dashed line with no tab." );
+    check( taskbar_title( L"", L"No classes", false ) == background_title( L"No classes", false ),
+           "With no desktop name the title is the same as background_title." );
+    check( taskbar_title( L"", L"MATH 117 Tutorial\nDWE 1515 · 08:30", true ) == L"MATH 117 Tutorial\nDWE 1515 · 08:30",
+           "With no desktop name and Next able to act, the title is the line unchanged." );
+    check( taskbar_title( L"Bakfiets", L"X", true ).compare( 0, 9, L"Bakfiets\t" ) == 0, "A desktop name of 12 characters or fewer is kept whole." );
+    check( taskbar_title( L"Desktop number 12", L"X", true ) == L"Desktop num…\tX",
+           "A longer desktop name is cut to its first 11 characters followed by an ellipsis." );
+}
+
 void check_already_open() {
     vector<wstring> one_file = { L"C:\\a\\L23.pdf" };
     vector<wstring> two_files = { L"C:\\a\\Slides.pdf", L"C:\\a\\Sum.pdf" };
@@ -197,6 +212,7 @@ void test_background() {
     check_sending_the_message();
     check_start_at_sign_in();
     check_the_title();
+    check_the_title_with_the_desktop();
     check_already_open();
     check_watch_end();
     if ( SUCCEEDED( started ) ) CoUninitialize();
