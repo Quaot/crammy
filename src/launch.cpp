@@ -124,6 +124,7 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
     for ( const auto &[plan_index, notes_item] : notes_windows ) {
         plan[plan_index].paths = { notes_file_name( chosen, *notes_item, first_pdf ) };
     }
+    for ( planned_window &window : plan ) window.split = chosen.split;
     return plan;
 }
 
@@ -142,16 +143,24 @@ static bool desktop_exists( const wstring &name ) {
     return false;
 }
 
+// Which desktop the setup's windows go to: "" for the desktop showing. A desktop that does not
+// exist is reported, and the windows open on the desktop showing.
+static wstring desktop_for( const setup &chosen, vector<wstring> &problems ) {
+    const wstring &desktop = chosen.desktop;
+    if ( desktop.empty() || lower( desktop ) == lower( current_desktop_name() ) ) return L"";
+    if ( !desktop_exists( desktop ) ) {
+        problems.push_back( L"There is no desktop named '" + desktop + L"', so the windows opened on this one." );
+        return L"";
+    }
+    return desktop;
+}
+
 // Opens the plan on the setup's desktop. When that desktop is not the one showing, the windows
 // are moved there as they appear, so the desktop showing stays the same.
 static vector<opened_window> open_on_its_desktop( const setup &chosen, const vector<planned_window> &plan,
                                                   vector<wstring> &problems ) {
-    const wstring &desktop = chosen.desktop;
-    if ( desktop.empty() || lower( desktop ) == lower( current_desktop_name() ) ) return open_windows_recorded( plan, problems );
-    if ( !desktop_exists( desktop ) ) {
-        problems.push_back( L"There is no desktop named '" + desktop + L"', so the windows opened on this one." );
-        return open_windows_recorded( plan, problems );
-    }
+    wstring desktop = desktop_for( chosen, problems );
+    if ( desktop.empty() ) return open_windows_recorded( plan, problems );
     return open_windows_on_desktop( plan, desktop, problems );
 }
 
@@ -186,13 +195,22 @@ vector<wstring> open_setups( const vector<setup_to_open> &setups ) {
     close_old_notes( notes_paths );
     for ( const wstring &path : notes_paths ) remember_notes( path );
 
+    // Every window of every setup starts at once, each marked with its desktop
+    vector<planned_window> all_windows;
     wstring first_desktop;
     for ( size_t i = 0; i < setups.size(); ++i ) {
         if ( plans[i].empty() ) continue;
-        vector<opened_window> opened = open_on_its_desktop( *setups[i].chosen, plans[i], problems );
-        wstring problem = save_places( *setups[i].chosen, opened );
-        if ( !problem.empty() ) problems.push_back( problem );
+        wstring desktop = desktop_for( *setups[i].chosen, problems );
+        for ( planned_window window : plans[i] ) {
+            window.desktop = desktop;
+            all_windows.push_back( window );
+        }
         if ( first_desktop.empty() ) first_desktop = setups[i].chosen->desktop;
+    }
+    vector<opened_window> opened = open_windows_recorded( all_windows, problems );
+    for ( const setup_to_open &each : setups ) {
+        wstring problem = save_places( *each.chosen, opened );
+        if ( !problem.empty() ) problems.push_back( problem );
     }
     show_desktop( first_desktop, problems );
     return problems;

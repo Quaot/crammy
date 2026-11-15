@@ -23,10 +23,12 @@
 
 [ECE 105]
 root = Downloads\ECE 105
+desktop = 105
 
 [ECE 105: Exam]
-right = pick "6 Exams" "2 Practice"
-left = notes
+split = 60
+left = pick "6 Exams" "2 Practice"
+right = notes
 
 [ECE 105: Lecture]
 full = newest "1 Lectures\PDF\ECE105-L*.pdf"
@@ -40,8 +42,9 @@ root = Downloads\ECE 150
 desktop = 150
 
 [ECE 150: Exam]
-left = notes
-right = pick "6 Exams" "2 Practice" "%USERPROFILE%\Downloads\Exam Bank\ECE 150"
+split = 60
+left = pick "6 Exams" "2 Practice" "%USERPROFILE%\Downloads\Exam Bank\ECE 150"
+right = notes
 
 [ECE 150: Lecture]
 full = sequence "1 Lectures\PDFs"
@@ -52,10 +55,12 @@ full = pick "."
 
 [ECE 190]
 root = Downloads\ECE 190
+desktop = 190
 
 [ECE 190: Exam]
-left = notes
-right = pick "6 Exams"
+split = 60
+left = pick "6 Exams"
+right = notes
 
 [ECE 190: Lecture]
 left = newest "1 Lectures\PDF\ECE190-W*-Slides.pdf"
@@ -67,6 +72,7 @@ full = pick "."
 
 [ECE 198]
 root = Downloads\ECE 198
+desktop = 198
 full = pick "."
 
 
@@ -75,8 +81,9 @@ root = Downloads\ENGL 192
 desktop = 192
 
 [ENGL 192: Worksheet]
-left = notes
-right = pick "2 Practice" "3 Assignments"
+split = 60
+left = pick "2 Practice" "3 Assignments"
+right = notes
 
 [ENGL 192: Lecture]
 full = newest "1 Lectures\ENGL192-W*-Slides.pdf"

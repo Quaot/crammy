@@ -52,6 +52,17 @@ wstring quoted( const wstring &text ) {
     return L"\"" + text + L"\"";
 }
 
+wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file ) {
+    wstring command = quoted( program_file( program::pdfcraft ) ) + L" --new-window --mode read";
+    if ( !control_file.empty() ) command += L" --control " + quoted( control_file );
+    for ( const wstring &path : paths ) command += L" " + quoted( path );
+    return command;
+}
+
+wstring acrobat_command( const wstring &path ) {
+    return quoted( program_file( program::acrobat ) ) + L" /n /A \"view=FitH\" " + quoted( path );   // /n: a new window
+}
+
 wstring notepad_command( const wstring &path ) {
     return quoted( program_file( program::notepad_pp ) ) + L" -multiInst -nosession " + quoted( path );
 }
@@ -84,8 +95,6 @@ bool bring_to_front( HWND hwnd ) {
 
 namespace {
 
-const wchar_t *pdfcraft_exe = program_file( program::pdfcraft );
-const wchar_t *acrobat_exe = program_file( program::acrobat );
 
 struct live_window {
     planned_window plan;
@@ -186,52 +195,59 @@ void move_window( HWND hwnd, const RECT &target, bool quietly = false ) {
                   SWP_NOZORDER | SWP_NOACTIVATE );
 }
 
-RECT side_area( const wstring &side, const RECT &screen ) {
-    int middle = screen.left + ( screen.right - screen.left ) / 2;
+RECT side_area( const wstring &side, const RECT &screen, int split = 50 ) {
+    int middle = screen.left + ( screen.right - screen.left ) * split / 100;
     if ( side == L"left" ) return { screen.left, screen.top, middle, screen.bottom };
     if ( side == L"right" ) return { middle, screen.top, screen.right, screen.bottom };
     return screen;
 }
 
+}  // namespace
+
+vector<RECT> window_targets( const vector<planned_window> &plan, const RECT &screen ) {
+    vector<RECT> targets( plan.size() );
+    for ( size_t i = 0; i < plan.size(); ++i ) {
+        vector<size_t> group;   // windows on the same side and desktop, in plan order
+        for ( size_t j = 0; j < plan.size(); ++j )
+            if ( plan[j].side == plan[i].side && lower( plan[j].desktop ) == lower( plan[i].desktop ) ) group.push_back( j );
+        size_t row = 0;
+        while ( group[row] != i ) ++row;
+        RECT area = side_area( plan[i].side, screen, plan[i].split );
+        int row_height = ( area.bottom - area.top ) / static_cast<int>( group.size() );
+        int top = area.top + static_cast<int>( row ) * row_height;
+        int bottom = ( row + 1 == group.size() ) ? area.bottom : top + row_height;
+        targets[i] = { area.left, top, area.right, bottom };
+    }
+    return targets;
+}
+
+namespace {
+
 // Starts every window, then moves each one to its part of the screen.
 // With a frame, every window is only moved to that frame: no keys are pressed and the focus stays.
-// With a desktop, each window is moved there as soon as it appears and is then sized quietly,
-// as with a frame, since keys and focus would act on the desktop showing.
+// A window with a desktop is moved there as soon as it appears and is then sized quietly, as with
+// a frame, since keys and focus would act on the desktop showing.
 vector<live_window> start_and_place( const vector<planned_window> &plan, const RECT *frame = nullptr,
-                                     const wstring &desktop = L"", vector<wstring> *problems = nullptr ) {
+                                     vector<wstring> *problems = nullptr ) {
     RECT screen;
     SystemParametersInfoW( SPI_GETWORKAREA, 0, &screen, 0 );
 
     vector<live_window> windows;
-    for ( const planned_window &each : plan ) windows.push_back( { each } );
-
-    // Windows that share a side split it into rows, in the order they were written
-    for ( const wchar_t *side : { L"left", L"right", L"full" } ) {
-        vector<live_window *> on_side;
-        for ( live_window &window : windows ) if ( window.plan.side == side ) on_side.push_back( &window );
-        RECT area = side_area( side, screen );
-        int row_height = on_side.empty() ? 0 : ( area.bottom - area.top ) / static_cast<int>( on_side.size() );
-        for ( size_t row = 0; row < on_side.size(); ++row ) {
-            int top = area.top + static_cast<int>( row ) * row_height;
-            int bottom = ( row + 1 == on_side.size() ) ? area.bottom : top + row_height;
-            on_side[row]->target = { area.left, top, area.right, bottom };
-            on_side[row]->rows = static_cast<int>( on_side.size() );
-        }
+    vector<RECT> targets = window_targets( plan, screen );
+    for ( size_t i = 0; i < plan.size(); ++i ) {
+        live_window window{ plan[i], frame ? *frame : targets[i] };
+        for ( const planned_window &other : plan )
+            if ( &other != &plan[i] && other.side == plan[i].side && lower( other.desktop ) == lower( plan[i].desktop ) ) ++window.rows;
+        windows.push_back( window );
     }
-    if ( frame )
-        for ( live_window &window : windows ) window.target = *frame;
 
     for ( live_window &window : windows ) {
         if ( window.plan.app == program::pdfcraft ) {
-            wstring command = quoted( pdfcraft_exe ) + L" --new-window";
-            if ( !window.plan.control_file.empty() ) {
+            if ( !window.plan.control_file.empty() )
                 CreateDirectoryW( parent_folder( window.plan.control_file ).c_str(), nullptr );
-                command += L" --control " + quoted( window.plan.control_file );
-            }
-            for ( const wstring &path : window.plan.paths ) command += L" " + quoted( path );
-            window.process_id = start_process( command );
+            window.process_id = start_process( pdfcraft_command( window.plan.paths, window.plan.control_file ) );
         } else if ( window.plan.app == program::acrobat ) {
-            start_process( quoted( acrobat_exe ) + L" /n " + quoted( window.plan.paths[0] ) );   // /n: a new window
+            start_process( acrobat_command( window.plan.paths[0] ) );
         } else if ( window.plan.app == program::notepad_pp ) {
             start_process( notepad_command( window.plan.paths[0] ) );
         } else {
@@ -252,13 +268,14 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
                 if ( window.hwnd ) taken.insert( window.hwnd );
             }
             if ( window.hwnd && !window.on_desktop ) {
+                const wstring &desktop = window.plan.desktop;
                 wstring problem = desktop.empty() ? L"" : move_window_to_desktop( window.hwnd, desktop );
                 if ( !problem.empty() && problems ) problems->push_back( problem );
                 window.on_desktop = true;
             }
             if ( !window.hwnd ) { settled = false; continue; }
             if ( !is_in_place( window.hwnd, window.target ) ) {
-                move_window( window.hwnd, window.target, frame != nullptr || !desktop.empty() );
+                move_window( window.hwnd, window.target, frame != nullptr || !window.plan.desktop.empty() );
                 settled = false;
             }
         }
@@ -266,14 +283,14 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
         Sleep( 100 );
     }
 
-    if ( frame || !desktop.empty() ) return windows;
+    if ( frame ) return windows;
 
     // Snap the left side first, so the right side fills the space next to it.
     // A window that did not snap into place is put there directly instead.
     for ( const wchar_t *side : { L"left", L"right", L"full" } ) {
         for ( live_window &window : windows ) {
-            if ( window.plan.side != side || !window.hwnd ) continue;
-            snap( window );
+            if ( window.plan.side != side || !window.hwnd || !window.plan.desktop.empty() ) continue;
+            if ( window.plan.split == 50 ) snap( window );   // Windows only snaps to halves
             wait_until_still( window.hwnd );
             if ( !is_in_place( window.hwnd, window.target, 8 ) ) {
                 ShowWindow( window.hwnd, SW_RESTORE );
@@ -283,7 +300,7 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
     }
 
     for ( const live_window &window : windows ) {
-        if ( window.hwnd && window.plan.app == program::notepad_pp ) bring_to_front( window.hwnd );
+        if ( window.hwnd && window.plan.app == program::notepad_pp && window.plan.desktop.empty() ) bring_to_front( window.hwnd );
     }
     return windows;
 }
@@ -306,12 +323,14 @@ vector<opened_window> recorded( const vector<live_window> &windows, vector<wstri
 }  // namespace
 
 vector<opened_window> open_windows_recorded( const vector<planned_window> &plan, vector<wstring> &problems ) {
-    return recorded( start_and_place( plan ), problems );
+    return recorded( start_and_place( plan, nullptr, &problems ), problems );
 }
 
 vector<opened_window> open_windows_on_desktop( const vector<planned_window> &plan, const wstring &desktop,
                                               vector<wstring> &problems ) {
-    return recorded( start_and_place( plan, nullptr, desktop, &problems ), problems );
+    vector<planned_window> on_desktop = plan;
+    for ( planned_window &window : on_desktop ) window.desktop = desktop;
+    return recorded( start_and_place( on_desktop, nullptr, &problems ), problems );
 }
 
 vector<opened_window> open_window_in_place_of( const planned_window &window, HWND old_window, vector<wstring> &problems ) {
