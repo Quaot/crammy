@@ -114,7 +114,7 @@ void check_finding() {
 void check_line_today() {
     calendar_date monday = { 2026, 11, 16 };
     next_class later = made( true, monday, L"ECE 150", L"LEC", 810, 860, L"PSE 5353" );
-    const wstring top = L"ECE 150 lec" + nl;
+    const wstring top = L"ECE 150 Lecture" + nl;
 
     check( line_text( later, 805, L"" ) == top + L"PSE 5353" + dot + L"in 5m",
            "a class starting in 5 minutes reads in 5m on the bottom row" );
@@ -132,7 +132,7 @@ void check_line_today() {
            "a class more than an hour away reads its start time" );
 
     next_class morning = made( true, monday, L"MATH 117", L"TUT", 510, 620, L"DWE 1515" );
-    check( line_text( morning, 400, L"" ) == L"MATH 117 tut" + nl + L"DWE 1515" + dot + L"08:30",
+    check( line_text( morning, 400, L"" ) == L"MATH 117 Tutorial" + nl + L"DWE 1515" + dot + L"08:30",
            "the start time has two digits for the hour" );
 
     check( line_text( later, 825, L"3.02 Linear search" ) == top + L"3.02 Linear search",
@@ -141,8 +141,21 @@ void check_line_today() {
            "a deck replaces the room and the in-minutes too, and the top row stays" );
 
     next_class project = made( true, monday, L"ECE 198", L"PRJ", 810, 860, L"E7 4433" );
-    check( line_text( project, 825, L"" ) == L"ECE 198 prj" + nl + L"E7 4433" + dot + L"now",
-           "the kind PRJ reads prj" );
+    check( line_text( project, 825, L"" ) == L"ECE 198 Prj" + nl + L"E7 4433" + dot + L"now",
+           "the kind PRJ reads Prj" );
+
+    struct kind_case {
+        const wchar_t *code;
+        const wchar_t *word;
+    };
+    const kind_case kind_cases[] = { { L"LEC", L"Lecture" },  { L"TUT", L"Tutorial" }, { L"LAB", L"Lab" },
+                                     { L"TST", L"Test" },     { L"SEM", L"Seminar" },  { L"PRJ", L"Prj" },
+                                     { L"XYZ", L"Xyz" } };
+    for ( const kind_case &one : kind_cases ) {
+        next_class made_kind = made( true, monday, L"ECE 150", one.code, 810, 860, L"PSE 5353" );
+        check( line_text( made_kind, 825, L"" ) == L"ECE 150 " + wstring( one.word ) + nl + L"PSE 5353" + dot + L"now",
+               "the kind code is written out as a word with a capital first letter" );
+    }
 
     wstring two_rows = line_text( later, 805, L"" );
     check( count( two_rows.begin(), two_rows.end(), L'\n' ) == 1 && two_rows.back() != L'\n',
@@ -151,15 +164,15 @@ void check_line_today() {
 
 void check_line_other_day() {
     next_class tuesday = made( false, { 2026, 11, 17 }, L"MATH 115", L"TUT", 630, 740, L"DWE 3516" );
-    check( line_text( tuesday, 1320, L"" ) == L"MATH 115 tut" + nl + L"Tue 10:30" + dot + L"DWE 3516",
+    check( line_text( tuesday, 1320, L"" ) == L"MATH 115 Tutorial" + nl + L"Tue 10:30" + dot + L"DWE 3516",
            "a class on another day reads the course and kind, then day, time and room" );
-    check( line_text( tuesday, 1320, L"3.02 Linear search" ) == L"MATH 115 tut" + nl + L"Tue 10:30" + dot + L"DWE 3516",
+    check( line_text( tuesday, 1320, L"3.02 Linear search" ) == L"MATH 115 Tutorial" + nl + L"Tue 10:30" + dot + L"DWE 3516",
            "a deck does not change the line of a class on another day" );
 
     const wchar_t *names[7] = { L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat", L"Sun" };
     for ( int offset = 0; offset < 7; ++offset ) {
         next_class day = made( false, { 2026, 11, 16 + offset }, L"ECE 105", L"LEC", 540, 590, L"PSE 1" );
-        check( line_text( day, 100, L"" ) == L"ECE 105 lec" + nl + wstring( names[offset] ) + L" 09:00" + dot + L"PSE 1",
+        check( line_text( day, 100, L"" ) == L"ECE 105 Lecture" + nl + wstring( names[offset] ) + L" 09:00" + dot + L"PSE 1",
                "the day name is right for each day of the week" );
     }
 }
@@ -176,13 +189,13 @@ void check_line_special() {
 void check_line_length() {
     calendar_date monday = { 2026, 11, 16 };
     next_class on_now = made( true, monday, L"ECE 150", L"LEC", 810, 860, L"PSE 5353" );
-    const wstring top = L"ECE 150 lec" + nl;
+    const wstring top = L"ECE 150 Lecture" + nl;
 
     wstring long_deck = L"1.08 Conditional statements and comparison operators";
     wstring expected = top + long_deck.substr( 0, 23 ) + ellipsis;
     wstring got = line_text( on_now, 825, long_deck );
     check( got == expected, "a long deck is cut on the bottom row to 23 characters and an ellipsis" );
-    check( got.size() == 11 + 1 + 24, "the cut bottom row is 24 characters beside the top row" );
+    check( got.size() == 15 + 1 + 24, "the cut bottom row is 24 characters beside the top row" );
     check( got.back() == ellipsis[0], "a long bottom row ends in the ellipsis character" );
 
     wstring deck_24 = L"123456789012345678901234";
@@ -208,20 +221,20 @@ void check_line_real() {
     calendar_date monday = { 2026, 11, 16 };
 
     next_class next = find_next_class( blocks, monday, 805, known );
-    check( line_text( next, 805, L"" ) == L"ECE 150 lec" + nl + L"PSE 5353" + dot + L"in 5m",
+    check( line_text( next, 805, L"" ) == L"ECE 150 Lecture" + nl + L"PSE 5353" + dot + L"in 5m",
            "the real timetable at 13:25 gives the in 5m line" );
     next = find_next_class( blocks, monday, 825, known );
-    check( line_text( next, 825, L"" ) == L"ECE 150 lec" + nl + L"PSE 5353" + dot + L"now",
+    check( line_text( next, 825, L"" ) == L"ECE 150 Lecture" + nl + L"PSE 5353" + dot + L"now",
            "the real timetable at 13:45 gives the now line" );
-    check( line_text( next, 825, L"3.02 Linear search" ) == L"ECE 150 lec" + nl + L"3.02 Linear search",
+    check( line_text( next, 825, L"3.02 Linear search" ) == L"ECE 150 Lecture" + nl + L"3.02 Linear search",
            "the real timetable at 13:45 with a deck gives the deck line" );
     next = find_next_class( blocks, monday, 400, known );
-    check( line_text( next, 400, L"" ) == L"MATH 117 tut" + nl + L"DWE 1515" + dot + L"08:30",
+    check( line_text( next, 400, L"" ) == L"MATH 117 Tutorial" + nl + L"DWE 1515" + dot + L"08:30",
            "the real timetable at 06:40 gives the 08:30 line" );
     next = find_next_class( blocks, monday, 1320, known );
-    check( line_text( next, 1320, L"" ) == L"MATH 115 tut" + nl + L"Tue 10:30" + dot + L"DWE 3516",
+    check( line_text( next, 1320, L"" ) == L"MATH 115 Tutorial" + nl + L"Tue 10:30" + dot + L"DWE 3516",
            "the real timetable at 22:00 gives the Tuesday line" );
-    check( line_text( next, 1320, L"3.02 Linear search" ) == L"MATH 115 tut" + nl + L"Tue 10:30" + dot + L"DWE 3516",
+    check( line_text( next, 1320, L"3.02 Linear search" ) == L"MATH 115 Tutorial" + nl + L"Tue 10:30" + dot + L"DWE 3516",
            "the real timetable at 22:00 with a deck still gives the Tuesday line" );
 }
 
