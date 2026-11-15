@@ -117,3 +117,111 @@ vector<wstring> open_setups( const vector<setup_to_open> &setups );
 - When the setup names a desktop that does not exist, its windows open on the desktop showing and that is reported. A window that cannot be moved stays on the desktop showing, and that is reported too.
 - After every setup has opened, the desktop of the first setup that names a desktop is shown, once.
 - `crammy --setup A --pick … --setup B --pick …` uses `open_setups`. With one `--setup`, it behaves as before except that it also opens without switching first and shows the desktop once at the end.
+
+## 6. Opening every setup at once (`src\tiling.h`)
+
+`open_setups` starts the programs for all its setups together, then moves and places each window as it appears, so the time taken is about that of the slowest program, not the sum of them all. Before, it opened one setup, waited for every window to settle, then started the next.
+
+`planned_window` gets one more field:
+
+```cpp
+wstring desktop;        // the desktop this window goes to, or "" for the desktop showing
+```
+
+`open_windows_recorded` honours it: a window with a desktop is moved there as it appears and sized without keys or focus, as section 5 describes. Windows with no desktop are placed as before, snapped with Win+arrow after the others are in place.
+
+Where each window goes on the screen is worked out by a function with no side effects, so it can be tested:
+
+```cpp
+// The part of the screen each planned window should fill, in plan order. Windows that share a
+// side split it into rows, top to bottom in plan order, but only with windows going to the same
+// desktop: windows on different desktops never share rows.
+vector<RECT> window_targets( const vector<planned_window> &plan, const RECT &screen );
+```
+
+- `left` is the left half of `screen`, `right` the right half, `full` all of it. The halves meet at `screen.left + width / 2` with integer division.
+- n windows on the same side and desktop each get a row of height `height / n` (integer division), in plan order; the last row runs to `screen.bottom`.
+- Desktop names are compared without regard to case.
+- An empty plan gives an empty result.
+
+Examples with `screen = { 0, 0, 1000, 600 }`:
+
+| plan (side, desktop) | targets |
+|---|---|
+| (left, "") , (right, "") | {0,0,500,600}, {500,0,1000,600} |
+| (full, "105"), (full, "192") | {0,0,1000,600}, {0,0,1000,600} |
+| (left, "150"), (left, "150"), (left, "190") | {0,0,500,300}, {0,300,500,600}, {0,0,500,600} |
+| (right, "150"), (right, "150"), (right, "150") | {500,0,1000,200}, {500,200,1000,400}, {500,400,1000,600} |
+| (left, "A"), (left, "a") | {0,0,500,300}, {0,300,500,600} |
+
+With `screen = { 100, 50, 1101, 651 }`, (left, "") gives {100,50,600,651} and (right, "") gives {600,50,1101,651}.
+
+The tests for this go in the same `tests\test_desktop_setups.cpp`, in a function called from `test_desktop_setups()`. They only call `window_targets`; they open no windows.
+
+## 7. Uneven sides (`split`)
+
+A subject or a setup can say how much of the screen width its left side takes:
+
+```
+[ECE 150]
+root = Downloads\ECE 150
+desktop = 150
+split = 75
+
+[ECE 150: Exam]
+left = pick "6 Exams" "2 Practice"
+right = notes
+```
+
+Here the PDF fills the left 75% and the notes the right 25%, like the 75/25 snap layout Windows offers.
+
+### Reading and writing (`src\profiles.h`)
+
+- `profile_block`, `setup_block` and `setup` each get `int split`. In the blocks, 0 means the line is missing. In `setup` it is the value that applies, 50 when neither the setup nor its subject sets one.
+- `split = N` is read like `desktop`: under a subject heading it goes to the subject, under a setup heading to that setup. A setup's own value wins over its subject's.
+- N must be a whole number from 10 to 90. Anything else (empty, `abc`, `9`, `91`, `75%`, `50.5`) adds the error `line L: split must be a whole number from 10 to 90` and leaves the value at 0. Spaces around the number are allowed.
+- `write_book` writes `split = N` after the `desktop` line of the subject or setup that has it, and nothing when it is 0, so a file without split lines reads and writes back unchanged.
+- The comment block at the top of a written file gains the line `#   split = 75                   the left side takes 75% of the width (default 50)`.
+
+### Placing windows (`src\tiling.h`)
+
+`planned_window` gets `int split = 50;`, filled from the setup by `plan_setup`. In `window_targets`, the line between left and right for a window is at `screen.left + width * split / 100` (integer arithmetic), using that window's own split. `full` ignores it. Rows split each side as before. With split 50 every result is the same as before.
+
+Windows with a split other than 50 are never snapped with Win+arrow, since Windows only snaps to halves: they are moved straight to their target.
+
+Examples with `screen = { 0, 0, 1000, 600 }`:
+
+| plan (side, desktop, split) | targets |
+|---|---|
+| (left, "", 75), (right, "", 75) | {0,0,750,600}, {750,0,1000,600} |
+| (left, "", 25), (right, "", 25) | {0,0,250,600}, {250,0,1000,600} |
+| (full, "", 75) | {0,0,1000,600} |
+| (right, "150", 75), (right, "150", 75) | {750,0,1000,300}, {750,300,1000,600} |
+| (left, "150", 75), (left, "190", 50) | {0,0,750,600}, {0,0,500,600} |
+
+With `screen = { 0, 0, 1001, 600 }`, (left, "", 75) gives {0,0,750,600}.
+
+### Tests
+
+In `tests\test_desktop_setups.cpp`: reading split on a subject, on a setup, a setup overriding its subject, the default of 50 in `setup` (through `all_setups`), every bad value listed above giving the error with the right line number, spaces around the number, `write_book` round trips with and without split lines, the new comment line, and every example in the table. They use `read_book`, `write_book` and `all_setups` on text in memory and never touch `profiles.txt`.
+
+## 8. Read mode, fit to width (`src\tiling.h`)
+
+Every PDF Crammy opens starts in PdfCraft's Read mode, fitted to the width of its window. PdfCraft takes the mode at launch (`--mode read`), which beats its own default for that window, so no PdfCraft settings file is touched. With no `--zoom`, PdfCraft fits the page width, its own default. (An earlier version passed `--zoom 80`; the owner asked for fit to width in its place.) Acrobat is told to fit the width through its open parameters.
+
+```cpp
+// The command line that starts PdfCraft on these PDFs in a window of its own, in Read mode,
+// fitted to width. control_file, when not empty, adds --control and that file.
+wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file );
+
+// The command line that starts Acrobat on one PDF in a new window, fitted to width.
+wstring acrobat_command( const wstring &path );
+```
+
+- `pdfcraft_command( { "a.pdf", "b c.pdf" }, "" )` is exactly `quoted( program_file( program::pdfcraft ) ) + L" --new-window --mode read \"a.pdf\" \"b c.pdf\""`.
+- With a control file `C:\t\ctl.txt` it is `quoted( program_file( program::pdfcraft ) ) + L" --new-window --mode read --control \"C:\t\ctl.txt\" \"a.pdf\""` for one PDF `a.pdf`.
+- Neither contains `--zoom`.
+- `acrobat_command( "a b.pdf" )` is exactly `quoted( program_file( program::acrobat ) ) + L" /n /A \"view=FitH\" \"a b.pdf\""`.
+- Crammy starts every PdfCraft and Acrobat window with these.
+
+Tests in `tests\test_desktop_setups.cpp` compare the strings only and start nothing.

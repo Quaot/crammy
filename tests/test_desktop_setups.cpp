@@ -8,6 +8,7 @@
 #include "../src/command_line.h"
 #include "../src/desktops.h"
 #include "../src/notes_tabs.h"
+#include "../src/profiles.h"
 #include "../src/tiling.h"
 
 namespace {
@@ -388,6 +389,307 @@ void check_actions() {
     check( parse_command_line( { L"--SHOW" } ).show, "--SHOW in capitals sets show." );
 }
 
+planned_window planned( const wstring &side, const wstring &desktop ) {
+    planned_window window;
+    window.side = side;
+    window.app = program::pdfcraft;
+    window.paths = { L"C:\\notes.pdf" };
+    window.desktop = desktop;
+    return window;
+}
+
+bool same_rect( const RECT &a, const RECT &b ) {
+    return a.left == b.left && a.top == b.top && a.right == b.right && a.bottom == b.bottom;
+}
+
+bool same_targets( const vector<RECT> &targets, const vector<RECT> &expected ) {
+    if ( targets.size() != expected.size() ) return false;
+    for ( size_t i = 0; i < targets.size(); ++i )
+        if ( !same_rect( targets[i], expected[i] ) ) return false;
+    return true;
+}
+
+void check_window_targets() {
+    RECT screen = { 0, 0, 1000, 600 };
+
+    check( window_targets( {}, screen ).empty(), "An empty plan gives no targets." );
+
+    check( same_targets( window_targets( { planned( L"left", L"" ), planned( L"right", L"" ) }, screen ),
+                         { { 0, 0, 500, 600 }, { 500, 0, 1000, 600 } } ),
+           "A left and a right window with no desktop get the left half and the right half." );
+
+    check( same_targets( window_targets( { planned( L"full", L"105" ), planned( L"full", L"192" ) }, screen ),
+                         { { 0, 0, 1000, 600 }, { 0, 0, 1000, 600 } } ),
+           "Two full windows on different desktops each get the whole screen." );
+
+    check( same_targets( window_targets( { planned( L"left", L"150" ), planned( L"left", L"150" ), planned( L"left", L"190" ) },
+                                         screen ),
+                         { { 0, 0, 500, 300 }, { 0, 300, 500, 600 }, { 0, 0, 500, 600 } } ),
+           "Two left windows on desktop 150 split the left half into rows, and the left window on 190 gets the whole half." );
+
+    check( same_targets( window_targets( { planned( L"right", L"150" ), planned( L"right", L"150" ), planned( L"right", L"150" ) },
+                                         screen ),
+                         { { 500, 0, 1000, 200 }, { 500, 200, 1000, 400 }, { 500, 400, 1000, 600 } } ),
+           "Three right windows on the same desktop split the right half into three rows, top to bottom." );
+
+    check( same_targets( window_targets( { planned( L"left", L"A" ), planned( L"left", L"a" ) }, screen ),
+                         { { 0, 0, 500, 300 }, { 0, 300, 500, 600 } } ),
+           "Desktop names A and a are the same desktop, so their left windows share rows." );
+
+    RECT second_screen = { 100, 50, 1101, 651 };
+    check( same_targets( window_targets( { planned( L"left", L"" ) }, second_screen ), { { 100, 50, 600, 651 } } ),
+           "On the screen from 100,50 to 1101,651 a left window runs from 100 to 600." );
+    check( same_targets( window_targets( { planned( L"right", L"" ) }, second_screen ), { { 600, 50, 1101, 651 } } ),
+           "On the screen from 100,50 to 1101,651 a right window runs from 600 to 1101." );
+
+    RECT odd_width = { 0, 0, 999, 600 };
+    check( same_targets( window_targets( { planned( L"left", L"" ), planned( L"right", L"" ) }, odd_width ),
+                         { { 0, 0, 499, 600 }, { 499, 0, 999, 600 } } ),
+           "On a screen 999 wide the halves meet at 499, the width halved with integer division." );
+
+    RECT odd_height = { 0, 0, 1000, 601 };
+    check( same_targets( window_targets( { planned( L"left", L"150" ), planned( L"left", L"150" ), planned( L"left", L"150" ) },
+                                         odd_height ),
+                         { { 0, 0, 500, 200 }, { 0, 200, 500, 400 }, { 0, 400, 500, 601 } } ),
+           "On a screen 601 high three rows are 200 high and the last row runs to the bottom of the screen." );
+
+    check( same_targets( window_targets( { planned( L"left", L"150" ), planned( L"right", L"150" ), planned( L"left", L"150" ) },
+                                         screen ),
+                         { { 0, 0, 500, 300 }, { 500, 0, 1000, 600 }, { 0, 300, 500, 600 } } ),
+           "Targets come back in plan order, and rows on a side go top to bottom in plan order." );
+
+    check( same_targets( window_targets( { planned( L"left", L"" ), planned( L"left", L"150" ) }, screen ),
+                         { { 0, 0, 500, 600 }, { 0, 0, 500, 600 } } ),
+           "A left window with no desktop and a left window on desktop 150 each get the whole left half." );
+
+    check( same_targets( window_targets( { planned( L"full", L"150" ), planned( L"full", L"150" ) }, screen ),
+                         { { 0, 0, 1000, 300 }, { 0, 300, 1000, 600 } } ),
+           "Two full windows on the same desktop split the whole screen into two rows." );
+}
+
+// The lines of a text, with any carriage return at the end of a line taken off.
+vector<wstring> lines_of( const wstring &text ) {
+    vector<wstring> lines;
+    size_t start = 0;
+    while ( start <= text.size() ) {
+        size_t end = text.find( L'\n', start );
+        if ( end == wstring::npos ) end = text.size();
+        wstring line = text.substr( start, end - start );
+        if ( !line.empty() && line.back() == L'\r' ) line.pop_back();
+        lines.push_back( line );
+        start = end + 1;
+    }
+    return lines;
+}
+
+bool has_line( const wstring &text, const wstring &wanted ) {
+    for ( const wstring &line : lines_of( text ) )
+        if ( line == wanted ) return true;
+    return false;
+}
+
+// True when the line right after the first line equal to first is equal to second.
+bool line_follows( const wstring &text, const wstring &first, const wstring &second ) {
+    vector<wstring> lines = lines_of( text );
+    for ( size_t i = 0; i + 1 < lines.size(); ++i )
+        if ( lines[i] == first ) return lines[i + 1] == second;
+    return false;
+}
+
+bool has_split_line( const wstring &text ) {
+    for ( const wstring &line : lines_of( text ) )
+        if ( line.compare( 0, 5, L"split" ) == 0 ) return true;
+    return false;
+}
+
+planned_window planned_split( const wstring &side, const wstring &desktop, int split ) {
+    planned_window window = planned( side, desktop );
+    window.split = split;
+    return window;
+}
+
+const wchar_t *split_text =
+    L"[ECE 150]\n"
+    L"root = C:\\Courses\\ECE 150\n"
+    L"desktop = 150\n"
+    L"split = 75\n"
+    L"left = notes\n"
+    L"\n"
+    L"[ECE 150: Exam]\n"
+    L"desktop = 151\n"
+    L"split = 30\n"
+    L"right = notes\n"
+    L"\n"
+    L"[ECE 150: Lecture]\n"
+    L"right = notes\n";
+
+const wchar_t *no_split_text =
+    L"[ECE 150]\n"
+    L"root = C:\\Courses\\ECE 150\n"
+    L"desktop = 150\n"
+    L"left = notes\n"
+    L"\n"
+    L"[ECE 150: Exam]\n"
+    L"desktop = 151\n"
+    L"right = notes\n";
+
+void check_reading_split() {
+    profile_book book = read_book( split_text );
+    check( book.errors.empty(), "Profile text with split lines on a subject and a setup reads without errors." );
+    check( book.profiles.size() == 1 && book.profiles[0].split == 75,
+           "split = 75 under a subject heading gives that subject a split of 75." );
+    check( book.profiles.size() == 1 && book.profiles[0].setups.size() == 2 && book.profiles[0].setups[0].split == 30,
+           "split = 30 under a setup heading gives that setup a split of 30." );
+    check( book.profiles.size() == 1 && book.profiles[0].setups.size() == 2 && book.profiles[0].setups[1].split == 0,
+           "A setup without a split line has a split of 0 in its block." );
+
+    profile_book bare = read_book( no_split_text );
+    check( bare.errors.empty() && bare.profiles.size() == 1 && bare.profiles[0].split == 0,
+           "A subject without a split line has a split of 0 in its block." );
+
+    vector<setup> setups = all_setups( book );
+    check( setups.size() == 2 && setups[0].split == 30,
+           "In all_setups, a setup's own split of 30 wins over its subject's split of 75." );
+    check( setups.size() == 2 && setups[1].split == 75,
+           "In all_setups, a setup without a split line takes its subject's split of 75." );
+
+    vector<setup> plain = all_setups( bare );
+    check( plain.size() == 1 && plain[0].split == 50,
+           "In all_setups, the split is 50 when neither the setup nor its subject has a split line." );
+
+    vector<setup> lone = all_setups( read_book( L"[ECE 198]\nroot = C:\\Courses\\ECE 198\nsplit = 60\nfull = notes\n" ) );
+    check( lone.size() == 1 && lone[0].split == 60,
+           "In all_setups, a subject with no setups opens with its own split of 60." );
+
+    profile_book spaced = read_book( L"[X]\nroot = C:\\X\nsplit =    75   \nleft = notes\n" );
+    check( spaced.errors.empty() && spaced.profiles.size() == 1 && spaced.profiles[0].split == 75,
+           "Spaces around the number in a split line are allowed and the number is still read." );
+
+    profile_book lowest = read_book( L"[X]\nroot = C:\\X\nsplit = 10\nleft = notes\n" );
+    check( lowest.errors.empty() && lowest.profiles.size() == 1 && lowest.profiles[0].split == 10,
+           "split = 10, the smallest allowed, is read without an error." );
+
+    profile_book highest = read_book( L"[X]\nroot = C:\\X\nsplit = 90\nleft = notes\n" );
+    check( highest.errors.empty() && highest.profiles.size() == 1 && highest.profiles[0].split == 90,
+           "split = 90, the largest allowed, is read without an error." );
+}
+
+void check_bad_split() {
+    struct bad_case {
+        const wchar_t *line;
+        const char *what;
+    };
+    const bad_case cases[] = {
+        { L"split =", "An empty split value" },
+        { L"split = abc", "The split value abc" },
+        { L"split = 9", "The split value 9" },
+        { L"split = 91", "The split value 91" },
+        { L"split = 75%", "The split value 75%" },
+        { L"split = 50.5", "The split value 50.5" },
+    };
+    for ( const bad_case &each : cases ) {
+        profile_book book = read_book( wstring( L"[X]\nroot = C:\\X\n" ) + each.line + L"\nleft = notes\n" );
+        check( book.errors.size() == 1 && book.errors[0] == L"line 3: split must be a whole number from 10 to 90",
+               ( std::string( each.what ) + " on line 3 of a subject gives the line 3 split error." ).c_str() );
+        check( book.profiles.size() == 1 && book.profiles[0].split == 0,
+               ( std::string( each.what ) + " leaves the subject's split at 0." ).c_str() );
+
+        profile_book in_setup =
+            read_book( wstring( L"[X]\nroot = C:\\X\nleft = notes\n\n[X: A]\n" ) + each.line + L"\nright = notes\n" );
+        check( in_setup.errors.size() == 1 && in_setup.errors[0] == L"line 6: split must be a whole number from 10 to 90",
+               ( std::string( each.what ) + " on line 6 of a setup gives the line 6 split error." ).c_str() );
+        check( in_setup.profiles.size() == 1 && in_setup.profiles[0].setups.size() == 1 &&
+                   in_setup.profiles[0].setups[0].split == 0,
+               ( std::string( each.what ) + " leaves the setup's split at 0." ).c_str() );
+    }
+}
+
+void check_writing_split() {
+    profile_book book = read_book( split_text );
+    wstring written = write_book( book );
+    check( line_follows( written, L"desktop = 150", L"split = 75" ),
+           "write_book writes split = 75 on the line after the subject's desktop line." );
+    check( line_follows( written, L"desktop = 151", L"split = 30" ),
+           "write_book writes split = 30 on the line after the setup's desktop line." );
+
+    profile_book again = read_book( written );
+    check( again.errors.empty() && again.profiles.size() == 1 && again.profiles[0].split == 75 &&
+               again.profiles[0].setups.size() == 2 && again.profiles[0].setups[0].split == 30 &&
+               again.profiles[0].setups[1].split == 0,
+           "Reading what write_book wrote gives back the same split values." );
+    check( write_book( again ) == written, "Writing a book with split lines a second time gives the same text." );
+
+    wstring written_bare = write_book( read_book( no_split_text ) );
+    check( !has_split_line( written_bare ), "write_book writes no split line for a file that had none." );
+    check( write_book( read_book( written_bare ) ) == written_bare,
+           "A file without split lines reads and writes back unchanged." );
+
+    check( has_line( written_bare, L"#   split = 75                   the left side takes 75% of the width (default 50)" ),
+           "The comment block at the top of a written file has the split line." );
+}
+
+void check_split_targets() {
+    RECT screen = { 0, 0, 1000, 600 };
+
+    check( same_targets( window_targets( { planned_split( L"left", L"", 75 ), planned_split( L"right", L"", 75 ) }, screen ),
+                         { { 0, 0, 750, 600 }, { 750, 0, 1000, 600 } } ),
+           "With split 75 the left window gets the left 750 and the right window the rest." );
+
+    check( same_targets( window_targets( { planned_split( L"left", L"", 25 ), planned_split( L"right", L"", 25 ) }, screen ),
+                         { { 0, 0, 250, 600 }, { 250, 0, 1000, 600 } } ),
+           "With split 25 the left window gets the left 250 and the right window the rest." );
+
+    check( same_targets( window_targets( { planned_split( L"full", L"", 75 ) }, screen ), { { 0, 0, 1000, 600 } } ),
+           "A full window with split 75 still gets the whole screen." );
+
+    check( same_targets( window_targets( { planned_split( L"right", L"150", 75 ), planned_split( L"right", L"150", 75 ) },
+                                         screen ),
+                         { { 750, 0, 1000, 300 }, { 750, 300, 1000, 600 } } ),
+           "Two right windows on desktop 150 with split 75 split the right 250 into two rows." );
+
+    check( same_targets( window_targets( { planned_split( L"left", L"150", 75 ), planned_split( L"left", L"190", 50 ) },
+                                         screen ),
+                         { { 0, 0, 750, 600 }, { 0, 0, 500, 600 } } ),
+           "Each window uses its own split: 75 on desktop 150 and 50 on desktop 190." );
+
+    RECT odd_width = { 0, 0, 1001, 600 };
+    check( same_targets( window_targets( { planned_split( L"left", L"", 75 ) }, odd_width ), { { 0, 0, 750, 600 } } ),
+           "On a screen 1001 wide a left window with split 75 runs to 750, with integer arithmetic." );
+}
+
+void check_split() {
+    check_reading_split();
+    check_bad_split();
+    check_writing_split();
+    check_split_targets();
+}
+
+void check_viewer_commands() {
+    wstring pdfcraft_start = quoted( program_file( program::pdfcraft ) ) + L" --new-window --mode read";
+
+    check( pdfcraft_command( { L"a.pdf", L"b c.pdf" }, L"" ) == pdfcraft_start + L" \"a.pdf\" \"b c.pdf\"",
+           "pdfcraft_command on a.pdf and b c.pdf with no control file is the quoted PdfCraft path, "
+           "--new-window --mode read, then each PDF quoted in order." );
+
+    check( pdfcraft_command( { L"a.pdf" }, L"C:\\t\\ctl.txt" ) ==
+               pdfcraft_start + L" --control \"C:\\t\\ctl.txt\" \"a.pdf\"",
+           "pdfcraft_command on a.pdf with the control file C:\\t\\ctl.txt puts --control and the quoted file "
+           "after --mode read and before the PDF." );
+
+    check( pdfcraft_command( { L"a.pdf" }, L"" ) == pdfcraft_start + L" \"a.pdf\"",
+           "pdfcraft_command on one PDF with no control file is the quoted PdfCraft path, "
+           "--new-window --mode read, then the quoted PDF." );
+
+    check( pdfcraft_command( { L"a.pdf" }, L"" ).find( L"--control" ) == wstring::npos,
+           "pdfcraft_command on one PDF with no control file has no --control in it." );
+
+    check( acrobat_command( L"a b.pdf" ) == quoted( program_file( program::acrobat ) ) + L" /n /A \"view=FitH\" \"a b.pdf\"",
+           "acrobat_command on a b.pdf is the quoted Acrobat path, /n /A \"view=FitH\", then the quoted PDF." );
+    check( pdfcraft_command( { L"a.pdf" }, L"" ).find( L"--zoom" ) == wstring::npos &&
+               pdfcraft_command( { L"a.pdf" }, L"C:\\t\\ctl.txt" ).find( L"--zoom" ) == wstring::npos,
+           "pdfcraft_command never passes --zoom, so PdfCraft fits the page width." );
+}
+
 } // namespace
 
 void test_desktop_setups() {
@@ -400,5 +702,8 @@ void test_desktop_setups() {
     check_setup_examples();
     check_command_line_errors();
     check_actions();
+    check_window_targets();
+    check_split();
+    check_viewer_commands();
     check( current_desktop_index() == showing_at_start, "The desktop showing is the same after all the desktop setups checks." );
 }
