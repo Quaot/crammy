@@ -87,10 +87,10 @@ full = pick "."
 
 [Math 115]
 root = Downloads\Math 115
+desktop = 115
 
 [Math 115: Exam]
-left = notes
-right = pick "6 Exams" "2 Practice" "%USERPROFILE%\Downloads\Exam Bank\Math 115"
+full = pick "6 Exams" "2 Practice" "%USERPROFILE%\Downloads\Exam Bank\Math 115"
 
 [Math 115: Lecture]
 full = newest "1 Lectures\PDF\MATH115-W*-Shell.pdf"
@@ -101,10 +101,10 @@ full = pick "."
 
 [Math 117]
 root = Downloads\Math 117
+desktop = 117
 
 [Math 117: Exam]
-left = notes
-right = pick "6 Exams" "2 Practice" "%USERPROFILE%\Downloads\Exam Bank\Math 117"
+full = pick "6 Exams" "2 Practice" "%USERPROFILE%\Downloads\Exam Bank\Math 117"
 
 [Math 117: Lecture]
 full = newest "1 Lectures\PDF\MATH117-L*.pdf"
