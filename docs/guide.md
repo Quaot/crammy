@@ -49,8 +49,8 @@ This is the path through the code, in order:
 3. If the setup has `pick` lines, or a `sequence` line with no saved place, `dialogs.cpp` shows a tick list and returns the PDFs chosen.
 4. `launch.cpp` (`open_setup`) turns each line into a `planned_window`, which says what program to start on which side of the screen with what files. `newest` lines find their file here, and a warning is added when that file is not from today. A `notes` line gets its file name from `files.cpp` (`notes_file`), named after the first PDF of the setup.
 5. `notes_tabs.cpp` (`close_old_notes`) saves and closes, in Notepad++, the notes files Crammy opened for earlier setups.
-6. `tiling.cpp` (`open_windows_on_desktop`) opens the windows and moves each one to the setup's desktop with `move_window_to_desktop` as it appears, then `desktops.cpp` (`switch_to_desktop`) shows that desktop once. `open_setups` does the same for several setups in one run, with one notes clean-up for all of them.
-7. `tiling.cpp` (`open_windows`) starts every program, finds each new window, moves it to its place, and snaps the windows that have a side to themselves.
+6. `launch.cpp` (`open_setups`) marks each planned window with its setup's desktop, or "" when that desktop is the one showing, and hands every window of every setup to `tiling.cpp` in one list. One notes clean-up runs first for all of them.
+7. `tiling.cpp` (`open_windows_recorded`) starts every program at once, finds each new window, moves a window that has a desktop there with `move_window_to_desktop` as soon as Explorer has put it on a desktop, and sizes it to its place. Windows for the desktop showing are snapped afterwards. Then `desktops.cpp` (`switch_to_desktop`) shows the first setup's desktop once. Filling four desktops takes about four seconds.
 8. `launch.cpp` (`save_places`) adds the decks opened for a `sequence` line to the setup's record in `decks today.txt`, and saves the highest of them as the setup's place in `places.txt`.
 
 Problems at any step are collected as plain sentences and shown at the end; nothing stops halfway with an error.
@@ -74,6 +74,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/tiling.cpp` | Starting programs, finding their windows, moving and snapping them; small helpers shared with other files |
 | `src/notes_tabs.cpp` | Closing old notes in every Notepad++ window |
 | `src/command_line.cpp` | Reading the command line, including several `--setup` groups |
+| `src/session.cpp` | Save and close all, the session file, and reopening it |
 | `src/desktops.cpp` | Reading virtual desktop names, switching between them, finding which desktop each window is on, and creating a desktop |
 | `src/timetable.cpp` | Reading `timetable.txt` and working out which classes meet on a date, with the date and weekday helpers |
 | `src/settings.cpp` | Reading and writing `settings.txt` and the shortcut text, and building the command that starts Youtonomous |
@@ -85,7 +86,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
 | `tests/check.cpp`, `tests/check.h` | `check()`, which prints one line and counts a failure |
-| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch` and `desktop_setups` |
+| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups` and `sessions` |
 | `tests/specs/*.md` | One spec for each area |
 | `tests/test.cmd` | Builds the checks and runs them |
 | `windhawk/crammy-button.wh.cpp` | The Windhawk mod that shows Crammy's line in two rows and the `▸` next button on the taskbar; `windhawk/README.md` says how to add it |
@@ -108,7 +109,7 @@ right = newest "1 Lectures\PDF\ECE190-W*-Sum.pdf" with acrobat
 ```
 
 - `[Subject]` starts a subject; `[Subject: Setup]` adds a setup to it. A subject with no setups opens as it is and is listed under its own name.
-- Subject settings: `root` (relative to the user folder), `desktop` (a virtual desktop name), `notes folder` (relative to the root; the default is `2 Practice` when it exists, else the root). A setup may set its own `notes folder` or `desktop`.
+- Subject settings: `root` (relative to the user folder), `desktop` (a virtual desktop name), `notes folder` (relative to the root; the default is `2 Practice` when it exists, else the root), `split` (the left side's share of the width in percent, a whole number from 10 to 90, 50 when missing). A setup may set its own `notes folder`, `desktop` or `split`. The exam and worksheet setups with notes use `split = 60`, with the paper on the left and the notes on the right.
 - Window lines are `side = kind "path" "path" ...`. `side` is `left`, `right` or `full`. Lines under a subject heading are shared by all its setups.
 - Kinds: `notes` (Notepad++; no path means a file named after the first PDF), `pdf` (one file), `newest` (one pattern, newest file by modified date), `tabs` (several PDFs in one PdfCraft window), `pick` (folders or files to tick from), `sequence` (the numbered decks of one folder in section order; opens the decks already opened today, as listed in `decks today.txt`; on a new day it opens the one after the place saved in `places.txt`, or shows the tick list when there is no place), `folder` (File Explorer).
 - A PDF line may end with `with acrobat`. Acrobat gets one window per PDF.
@@ -122,18 +123,22 @@ To add a setting or a kind, change `profiles.h` (the structs), `read_book` and `
 
 | Program | Started with | Its window is found by |
 |---|---|---|
-| PdfCraft | `pdfcraft.exe --new-window "a.pdf" "b.pdf"` (several files give tabs in one window); a window Next opens for lecture decks also gets `--control <file>` | the process ID of the program started |
-| Acrobat | `Acrobat.exe /n "file.pdf"` (`/n` forces a new window) | a title containing the file name and "Adobe Acrobat"; `/n` hands off to another process, so the ID cannot be used |
-| Notepad++ | `notepad++.exe -multiInst -nosession "file.txt"` (a window of its own, from `notepad_command`) | a title containing the file name and "Notepad++" |
+| PdfCraft | `pdfcraft.exe --new-window --mode read "a.pdf" "b.pdf"` (from `pdfcraft_command`; several files give tabs in one window); a window Next opens for lecture decks also gets `--control <file>` | the process ID of the program started |
+| Acrobat | `Acrobat.exe /n /A "view=FitH" "file.pdf"` (from `acrobat_command`; `/n` forces a new window, `view=FitH` fits the page width) | a title containing the file name and "Adobe Acrobat"; `/n` hands off to another process, so the ID cannot be used |
+| Notepad++ | `notepad++.exe -multiInst -nosession "file.txt"` (a window of its own, from `notepad_command`; a reopened session adds its other files after the first) | a title containing any of its file names and "Notepad++" |
 | File Explorer | `explorer.exe "folder"` | window class `CabinetWClass` and the folder name in the title |
 
-The program paths are in `program_file` in `tiling.cpp`. Each side of the work area is split into equal rows for the windows on it. Windows 11 draws invisible borders around windows, so sizes use the visible frame from `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)`.
+PdfCraft's `--mode read` opens Read mode for that window, over its own default. With no `--zoom`, PdfCraft uses its default zoom, fit to width; its `--zoom` only takes a number, and an unknown option such as `--fit` is ignored with a warning in its log. A PdfCraft window started with `--control <file>` can be asked about its state with `pdfcraft-cli ui --control <file> state`, which is how these options were checked.
+
+The program paths are in `program_file` in `tiling.cpp`. `window_targets` works out each window's rectangle without opening anything: each side is split into equal rows for the windows on it that go to the same desktop, the line between left and right is at the setup's `split`, and a window with `has_frame` (a reopened one) gets its saved frame. Windows 11 draws invisible borders around windows, so sizes use the visible frame from `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)`.
 
 `open_windows_recorded` does the same as `open_windows` and also returns an `opened_window` for each file: the window that shows it, the program and the side. Next keeps these to know which windows it opened.
 
 Programs often restore their own saved size a moment after appearing, so `open_windows` keeps moving each window back until all of them stay put for four checks in a row (15 seconds at most).
 
-A window with a side to itself is then snapped by pressing Win+Left or Win+Right, which makes Windows treat it as snapped. Before pressing keys, `bring_to_front` presses F24 (a key no keyboard has) because Windows only lets the program that sent the last key press bring a window forward. A window that does not end up in place is moved there directly. Two or more windows on one side are only moved, never snapped: snapping to quarters was tried and did not work reliably with PdfCraft.
+A new program's window can appear a moment before Explorer puts it on any desktop. Moving it then fails (`move_window_to_desktop` says it is "not on any desktop yet"), so the move is tried again on every pass until it works, and is reported only if it never does. Before this retry, a reopened window sometimes stayed on the desktop showing.
+
+A window for the desktop showing with a side to itself is then snapped by pressing Win+Left or Win+Right, which makes Windows treat it as snapped. Before pressing keys, `bring_to_front` presses F24 (a key no keyboard has) because Windows only lets the program that sent the last key press bring a window forward. A window that does not end up in place is moved there directly. Two or more windows on one side are only moved, never snapped: snapping to quarters was tried and did not work reliably with PdfCraft. Windows only snaps to halves, so a setup with a `split` other than 50, a window going to another desktop, and a reopened window are all moved straight to their rectangle, with no keys pressed.
 
 `crammy.manifest` makes the program aware of per-monitor DPI, so all coordinates are real pixels. Do not remove it.
 
@@ -158,9 +163,19 @@ Notes are plain `.txt` files opened in Notepad++. Crammy writes each one it open
 | `NPPMSG + 38` | save the tab showing |
 | `NPPMSG + 48`, lParam 41003 | menu command File > Close |
 
+Each notes file has a Notepad++ window of its own (`-multiInst`), so `close_old_notes` looks at every window of class `Notepad++`. A window whose only file is an old notes file is saved and closed whole. Notepad++'s second view always reports one empty document even while it is hidden, so it is counted only when `NPPMSG + 23` (current document index) for it is not -1.
+
 The title of the Notepad++ window shows the full path of the tab showing, with `*` in front while it has unsaved changes. A tab is closed only after saving cleared the `*`; otherwise it stays open and stays on the list. Tabs not on the list are never touched, and the tab that was showing before is shown again at the end. None of this brings Notepad++ forward or presses keys.
 
 Windows 11 Notepad has no way for another program to save or close a tab, which is why notes moved to Notepad++.
+
+## Saving and reopening a session
+
+`session.cpp` handles the tray menu items **Save and close all** and **Reopen last session**, and `crammy --save-and-close` and `crammy --reopen`. Study windows are every window of `pdfcraft.exe`, every Notepad++ window of class `Notepad++` and every Acrobat window of class `AcrobatSDIWindow`, whoever opened them.
+
+`save_and_close` records each window's program, desktop name and visible frame (for a minimized window, the frame it goes back to), and its files. For Notepad++ it goes through every tab, saves each one that has a file, and lists those files. An empty "new 1" tab is marked saved with Scintilla's `SCI_SETSAVEPOINT` (2014) so closing does not ask about it; a "new 1" tab with text keeps the whole window open, with a message. `SCI_GETLENGTH` (2006) tells the two apart; both are sent to the view's `Scintilla` child and take no pointers, so they work from another process. For PdfCraft and Acrobat the files are the PDFs on the process's command line, read with `NtQueryInformationProcess` class 60. Each window then gets `WM_CLOSE`; one still open after 5 seconds, for example one asking about unsaved changes, is named in a message.
+
+The record goes to `last session.txt` next to the exe (not committed), with `asked = no` at the top and a `[window]` block for each window. When the background Crammy starts and finds `asked = no`, it asks once whether to reopen. Either answer sets `asked = yes`. This happens on any start of the background copy, so restarting it after a build asks too. `reopen_session` turns the record into planned windows with `has_frame` set, drops files that no longer exist, and opens them all at once on their desktops without switching.
 
 ## Background mode and the panel
 
@@ -323,7 +338,8 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 ## Known limits
 
 - Program paths are fixed in `program_file`. If PdfCraft, Acrobat or Notepad++ moves, Crammy will report that no window appeared.
-- If Notepad++ is open on another desktop, a new notes tab opens in that window, and moving it brings it to the current desktop.
+- A saved session knows only the PDFs a PdfCraft or Acrobat window was started with. A PDF opened later in another tab of the same window is not remembered.
+- Save and close all closes study windows the owner opened by hand too. Never run it on his real windows without his say-so.
 - `newest` uses the modified date, so re-saving an old PDF makes it the newest.
 - When a separate copy of `crammy.exe` opens a setup with decks, the background Crammy does not learn of its windows, so a later next deck leaves the old deck window open under the new one.
 - Only one monitor is handled: everything uses the primary monitor's work area, and the panel assumes one as well.
