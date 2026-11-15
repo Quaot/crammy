@@ -4,7 +4,7 @@
 
 #include "text.h"
 
-enum class program { pdfcraft, acrobat, notepad_pp, explorer };
+enum class program { pdfcraft, acrobat, notepad_pp, explorer, chrome };
 
 // Where each program's .exe is, for starting it and for its icon
 const wchar_t *program_file( program app );
@@ -12,7 +12,7 @@ const wchar_t *program_file( program app );
 struct planned_window {
     wstring side;           // left, right or full
     program app;
-    vector<wstring> paths;  // PDFs for PdfCraft, one file for Notepad++, one folder for Explorer
+    vector<wstring> paths;  // PDFs for PdfCraft, one file for Notepad++, one folder for Explorer, addresses for Chrome
     wstring control_file;   // PdfCraft only: when set, the window starts with --control and this file
     wstring desktop;        // the desktop this window goes to, or "" for the desktop showing
     int split = 50;         // the left side's share of the screen width in percent
@@ -43,6 +43,9 @@ wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_f
 
 // The command line that starts Acrobat on one PDF in a new window, fitted to width.
 wstring acrobat_command( const wstring &path );
+
+// The command line that starts Chrome on these addresses, as tabs in a new window.
+wstring chrome_command( const vector<wstring> &addresses );
 
 // The command line that starts Notepad++ on one file, in a window of its own.
 wstring notepad_command( const wstring &path );

@@ -2,14 +2,14 @@
 
 #include "text.h"
 
-enum class item_kind { notes, pdf, tabs, pick, folder, newest, sequence };
+enum class item_kind { notes, pdf, tabs, pick, folder, newest, sequence, web };
 enum class viewer { pdfcraft, acrobat };
 
 // One window line as written in profiles.txt. Paths stay as written.
 struct written_item {
     wstring side;           // left, right or full
     item_kind kind;
-    vector<wstring> paths;
+    vector<wstring> paths;  // for web, the addresses
     viewer app = viewer::pdfcraft;
 };
 

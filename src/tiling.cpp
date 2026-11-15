@@ -31,6 +31,7 @@ const wchar_t *program_file( program app ) {
     case program::acrobat: return L"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe";
     case program::notepad_pp: return L"C:\\Program Files\\Notepad++\\notepad++.exe";
     case program::explorer: return L"C:\\Windows\\explorer.exe";
+    case program::chrome: return L"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
     }
     return L"";
 }
@@ -61,6 +62,12 @@ wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_f
 
 wstring acrobat_command( const wstring &path ) {
     return quoted( program_file( program::acrobat ) ) + L" /n /A \"view=FitH\" " + quoted( path );   // /n: a new window
+}
+
+wstring chrome_command( const vector<wstring> &addresses ) {
+    wstring command = quoted( program_file( program::chrome ) ) + L" --new-window";
+    for ( const wstring &address : addresses ) command += L" " + quoted( address );
+    return command;
 }
 
 wstring notepad_command( const wstring &path ) {
@@ -104,7 +111,45 @@ struct live_window {
     HWND hwnd = nullptr;
     bool on_desktop = false;    // moved to the desktop asked for, or no desktop was asked for
     wstring move_problem;       // why the last try at moving it failed
+    DWORD started_at = 0;       // Chrome only: when it was started, or 0 before that
 };
+
+// Chrome hands a new window to the copy already running, so its window is told apart from the
+// others only by being new. Each Chrome window is started after the one before it has appeared.
+bool is_chrome( HWND hwnd ) {
+    wchar_t class_name[64];
+    GetClassNameW( hwnd, class_name, 64 );
+    if ( wstring( class_name ) != L"Chrome_WidgetWin_1" ) return false;
+    DWORD process_id = 0;
+    GetWindowThreadProcessId( hwnd, &process_id );
+    HANDLE process = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id );
+    if ( !process ) return false;
+    wchar_t path[MAX_PATH];
+    DWORD size = MAX_PATH;
+    bool found = QueryFullProcessImageNameW( process, 0, path, &size );
+    CloseHandle( process );
+    return found && lower( file_name( path ) ) == L"chrome.exe";
+}
+
+std::set<HWND> chrome_windows() {
+    std::set<HWND> windows;
+    for ( HWND hwnd : top_windows() ) if ( is_chrome( hwnd ) ) windows.insert( hwnd );
+    return windows;
+}
+
+// Starts the next Chrome window once no other is still on its way, waiting at most 6 seconds for one
+void start_next_chrome( vector<live_window> &windows ) {
+    for ( live_window &window : windows ) {
+        bool on_its_way = window.plan.app == program::chrome && window.started_at && !window.hwnd;
+        if ( on_its_way && GetTickCount() - window.started_at < 6000 ) return;
+    }
+    for ( live_window &window : windows ) {
+        if ( window.plan.app != program::chrome || window.started_at ) continue;
+        start_process( chrome_command( window.plan.paths ) );
+        window.started_at = GetTickCount();
+        return;
+    }
+}
 
 
 bool is_explorer( HWND hwnd ) {
@@ -113,9 +158,13 @@ bool is_explorer( HWND hwnd ) {
     return wstring( class_name ) == L"CabinetWClass";
 }
 
-HWND find_window( const live_window &window, const std::set<HWND> &taken ) {
+HWND find_window( const live_window &window, const std::set<HWND> &taken, const std::set<HWND> &chrome_before ) {
     for ( HWND hwnd : top_windows() ) {
         if ( taken.count( hwnd ) ) continue;
+        if ( window.plan.app == program::chrome ) {
+            if ( window.started_at && !chrome_before.count( hwnd ) && is_chrome( hwnd ) ) return hwnd;
+            continue;
+        }
         if ( window.plan.app == program::notepad_pp ) {
             // Notepad++ shows one of its files in its title, whichever tab is in front
             wstring title = title_of( hwnd );
@@ -250,7 +299,9 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
         windows.push_back( window );
     }
 
+    std::set<HWND> chrome_before = chrome_windows();
     for ( live_window &window : windows ) {
+        if ( window.plan.app == program::chrome ) continue;   // started one at a time below
         if ( window.plan.app == program::pdfcraft ) {
             if ( !window.plan.control_file.empty() )
                 CreateDirectoryW( parent_folder( window.plan.control_file ).c_str(), nullptr );
@@ -273,9 +324,10 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
     DWORD started = GetTickCount();
     while ( GetTickCount() - started < 15000 && quiet_checks < 4 ) {
         bool settled = true;
+        start_next_chrome( windows );
         for ( live_window &window : windows ) {
             if ( !window.hwnd ) {
-                window.hwnd = find_window( window, taken );
+                window.hwnd = find_window( window, taken, chrome_before );
                 if ( window.hwnd ) taken.insert( window.hwnd );
             }
             // A new window is only on a desktop once Explorer has taken it in, which can be a moment

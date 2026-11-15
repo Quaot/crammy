@@ -2,7 +2,7 @@
 
 #include <windows.h>
 
-#include "profiles.h"
+#include "side_choices.h"
 
 // The picture of the screen in the main window. Files and folders dropped on it
 // become windows of the setup, and its tiles can be dragged between sides.
@@ -18,3 +18,12 @@ void add_notes_tile();
 
 // What the canvas registers with Windows for drag and drop. The tests drop files on it directly.
 struct IDropTarget *canvas_drop_target();
+
+// Where the line between the left and right sides is drawn, as the left side's share in percent.
+// Drops and clicks on a split screen use the same line.
+void set_canvas_split( int split );
+
+// A click on an empty part of the screen asks what to put there. The usual asker shows a menu and
+// then a file, folder or address dialog starting in start_folder. The tests put their own in place.
+using side_asker = side_answer ( * )( HWND canvas, const wstring &side, const wstring &start_folder );
+void set_side_asker( side_asker asker );   // nullptr puts the usual one back

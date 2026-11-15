@@ -13,18 +13,20 @@
 
 namespace {
 
-enum control_id { id_setups = 100, id_new, id_rename, id_delete, id_desktop, id_notes, id_text };
+enum control_id { id_setups = 100, id_new, id_rename, id_delete, id_desktop, id_notes, id_text, id_split };
 
 struct main_state {
     HWND window = nullptr;
     HWND setups_label = nullptr, setups_box = nullptr, new_button = nullptr, rename_button = nullptr, delete_button = nullptr;
     HWND desktop_label = nullptr, desktop_box = nullptr, notes_button = nullptr, text_button = nullptr;
+    HWND split_label = nullptr, split_box = nullptr;
     HWND canvas = nullptr, hint = nullptr, open_button = nullptr;
     HFONT font = nullptr;
     UINT dpi = 96;
     profile_book book;
     vector<setup> setups;           // in the order of the list
     vector<wstring> desktops;       // names in the desktop list, after "This desktop"
+    vector<split_choice> splits;    // in the order of the split list
 };
 
 main_state ui;
@@ -56,12 +58,23 @@ void show_desktop_choice( const profile_block &profile ) {
     SendMessageW( ui.desktop_box, CB_SETCURSEL, selected, 0 );
 }
 
+void show_split_choice( int split ) {
+    SendMessageW( ui.split_box, CB_RESETCONTENT, 0, 0 );
+    ui.splits = split_choices( split );
+    for ( size_t i = 0; i < ui.splits.size(); ++i ) {
+        SendMessageW( ui.split_box, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>( ui.splits[i].label.c_str() ) );
+        if ( ui.splits[i].split == split ) SendMessageW( ui.split_box, CB_SETCURSEL, i, 0 );
+    }
+    set_canvas_split( split );
+}
+
 void show_current_setup() {
     const setup *chosen = current_setup();
     bool has_setup = chosen != nullptr;
     EnableWindow( ui.rename_button, has_setup );
     EnableWindow( ui.delete_button, has_setup );
     EnableWindow( ui.desktop_box, has_setup );
+    EnableWindow( ui.split_box, has_setup );
     EnableWindow( ui.notes_button, has_setup );
     EnableWindow( ui.open_button, has_setup );
     if ( !has_setup ) {
@@ -71,6 +84,7 @@ void show_current_setup() {
     profile_block &profile = ui.book.profiles[chosen->profile_index];
     show_items( &items_of( ui.book, chosen->profile_index, chosen->setup_index ), root_of( profile ) );
     show_desktop_choice( profile );
+    show_split_choice( chosen->split );
 }
 
 void fill_setup_list( const wstring &select_title ) {
@@ -190,6 +204,16 @@ void choose_desktop() {
     save();
 }
 
+void choose_split() {
+    const setup *chosen = current_setup();
+    LRESULT index = SendMessageW( ui.split_box, CB_GETCURSEL, 0, 0 );
+    if ( !chosen || index < 0 || index >= LRESULT( ui.splits.size() ) ) return;
+    int split = ui.splits[index].split;
+    set_split( ui.book, chosen->profile_index, chosen->setup_index, split );
+    save();
+    set_canvas_split( split );
+}
+
 void open_current() {
     const setup *found = current_setup();
     if ( !found ) return;
@@ -236,9 +260,13 @@ void lay_out( int width, int height ) {
 
     int x = pad + list_width + pad;
     int right_width = width - x - pad;
-    int label = scaled( 150, dpi ), box = scaled( 190, dpi ), tool = scaled( 110, dpi );
+    int label = scaled( 150, dpi ), box = scaled( 150, dpi ), tool = scaled( 110, dpi );
+    int split_label = scaled( 44, dpi ), split_box = scaled( 90, dpi );
     MoveWindow( ui.desktop_label, x, pad + scaled( 6, dpi ), label, row, TRUE );
     MoveWindow( ui.desktop_box, x + label, pad, box, scaled( 300, dpi ), TRUE );
+    int split_x = x + label + box + 2 * pad;
+    MoveWindow( ui.split_label, split_x, pad + scaled( 6, dpi ), split_label, row, TRUE );
+    MoveWindow( ui.split_box, split_x + split_label, pad, split_box, scaled( 300, dpi ), TRUE );
     MoveWindow( ui.text_button, width - pad - tool, pad, tool, row, TRUE );
     MoveWindow( ui.notes_button, width - 2 * pad - 2 * tool, pad, tool, row, TRUE );
 
@@ -260,6 +288,8 @@ void create_controls( HWND window ) {
     ui.delete_button = add_control( window, WC_BUTTONW, L"Delete", WS_TABSTOP, id_delete, font );
     ui.desktop_label = add_control( window, WC_STATICW, L"Desktop", SS_NOPREFIX | SS_ENDELLIPSIS, 0, font );
     ui.desktop_box = add_control( window, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, id_desktop, font );
+    ui.split_label = add_control( window, WC_STATICW, L"Split", SS_NOPREFIX, 0, font );
+    ui.split_box = add_control( window, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, id_split, font );
     ui.notes_button = add_control( window, WC_BUTTONW, L"Add notes", WS_TABSTOP, id_notes, font );
     ui.text_button = add_control( window, WC_BUTTONW, L"Edit as text", WS_TABSTOP, id_text, font );
     ui.canvas = create_canvas( window, font, ui.dpi );
@@ -285,6 +315,7 @@ LRESULT CALLBACK main_proc( HWND window, UINT message, WPARAM wparam, LPARAM lpa
         else if ( id == id_notes ) add_notes_tile();
         else if ( id == id_text ) show_editor( window );
         else if ( id == id_desktop && code == CBN_SELCHANGE ) choose_desktop();
+        else if ( id == id_split && code == CBN_SELCHANGE ) choose_split();
         else if ( id == id_setups && code == LBN_SELCHANGE ) show_current_setup();
         else if ( id == id_setups && code == LBN_DBLCLK ) open_current();
         return 0;

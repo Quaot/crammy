@@ -4,7 +4,7 @@ This guide is for anyone changing Crammy. Read it once before touching the code.
 
 ## The short version
 
-Crammy is a Win32 program in C++17 with no libraries beyond Windows itself. It reads `profiles.txt`, shows a window where setups can be built by dragging files, and opens a setup by starting PdfCraft, Adobe Acrobat, Notepad++ or File Explorer and moving each window to its place on the screen.
+Crammy is a Win32 program in C++17 with no libraries beyond Windows itself. It reads `profiles.txt`, shows a window where setups can be built by dragging files, and opens a setup by starting PdfCraft, Adobe Acrobat, Notepad++, File Explorer or Google Chrome and moving each window to its place on the screen.
 
 It can also run in the background with a tray icon and a keyboard shortcut. From there it shows a panel with today's classes from `timetable.txt` and a chip for each virtual desktop. Links at the bottom of the panel start Youtonomous or bring up the setups.
 
@@ -60,9 +60,10 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | File | Job |
 |---|---|
 | `src/main.cpp` | Command line, then the main window or a direct open |
-| `src/main_window.cpp` | The main window: setup list, New setup / Rename / Delete, desktop choice, Add notes, Edit as text, Open |
-| `src/canvas.cpp` | The screen picture: drawing tiles, drag and drop from File Explorer, dragging tiles, the right-click menu |
-| `src/dialogs.cpp` | The New setup / Rename dialog and the tick list shown before opening; the tick list is the only place answer keys are hidden |
+| `src/main_window.cpp` | The main window: setup list, New setup / Rename / Delete, desktop and split choice, Add notes, Edit as text, Open |
+| `src/canvas.cpp` | The screen picture: drawing tiles, drag and drop of files and browser links, dragging tiles, the right-click menu, the menu for an empty side |
+| `src/side_choices.cpp` | With no window: what a choice from the empty-side menu becomes (`item_for_answer`), which side a click fills (`empty_side_at`), web address helpers, the split choices and `set_split` |
+| `src/dialogs.cpp` | The New setup / Rename dialog, the tick list shown before opening (the only place answer keys are hidden), the web address dialog, and the Windows file and folder dialogs |
 | `src/editor_window.cpp` | Edit as text: a plain editor for `profiles.txt` |
 | `src/profiles.cpp` | Reading and writing `profiles.txt`; joining paths to the root |
 | `src/sequence.cpp` | Putting numbered lecture decks in section order and choosing the decks to open (`decks_to_open`), with the reading and writing of `places.txt` and `decks today.txt` |
@@ -86,7 +87,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
 | `tests/check.cpp`, `tests/check.h` | `check()`, which prints one line and counts a failure |
-| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups` and `sessions` |
+| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions` and `setup_options` |
 | `tests/specs/*.md` | One spec for each area |
 | `tests/test.cmd` | Builds the checks and runs them |
 | `windhawk/crammy-button.wh.cpp` | The Windhawk mod that shows Crammy's line on the taskbar, with the current desktop's name before it, plain, with a thin line after it; `windhawk/README.md` says how to add it |
@@ -111,7 +112,7 @@ right = newest "1 Lectures\PDF\ECE190-W*-Sum.pdf" with acrobat
 - `[Subject]` starts a subject; `[Subject: Setup]` adds a setup to it. A subject with no setups opens as it is and is listed under its own name.
 - Subject settings: `root` (relative to the user folder), `desktop` (a virtual desktop name), `notes folder` (relative to the root; the default is `2 Practice` when it exists, else the root), `split` (the left side's share of the width in percent, a whole number from 10 to 90, 50 when missing). A setup may set its own `notes folder`, `desktop` or `split`. The exam and worksheet setups with notes use `split = 60`, with the paper on the left and the notes on the right.
 - Window lines are `side = kind "path" "path" ...`. `side` is `left`, `right` or `full`. Lines under a subject heading are shared by all its setups.
-- Kinds: `notes` (Notepad++; no path means a file named after the first PDF), `pdf` (one file), `newest` (one pattern, newest file by modified date), `tabs` (several PDFs in one PdfCraft window), `pick` (folders or files to tick from), `sequence` (the numbered decks of one folder in section order; opens the decks already opened today, as listed in `decks today.txt`; on a new day it opens the one after the place saved in `places.txt`, or shows the tick list when there is no place), `folder` (File Explorer).
+- Kinds: `notes` (Notepad++; no path means a file named after the first PDF), `pdf` (one file), `newest` (one pattern, newest file by modified date), `tabs` (several PDFs in one PdfCraft window), `pick` (folders or files to tick from), `sequence` (the numbered decks of one folder in section order; opens the decks already opened today, as listed in `decks today.txt`; on a new day it opens the one after the place saved in `places.txt`, or shows the tick list when there is no place), `folder` (File Explorer), `web` (Google Chrome; one or more addresses, each starting with `http://` or `https://`, kept as written and never joined to the root).
 - A PDF line may end with `with acrobat`. Acrobat gets one window per PDF.
 - Paths are stored relative to the root when they are inside it. `*` works in file names. `%USERPROFILE%` and other variables are expanded.
 
@@ -127,6 +128,9 @@ To add a setting or a kind, change `profiles.h` (the structs), `read_book` and `
 | Acrobat | `Acrobat.exe /n /A "view=FitH" "file.pdf"` (from `acrobat_command`; `/n` forces a new window, `view=FitH` fits the page width) | a title containing the file name and "Adobe Acrobat"; `/n` hands off to another process, so the ID cannot be used |
 | Notepad++ | `notepad++.exe -multiInst -nosession "file.txt"` (a window of its own, from `notepad_command`; a reopened session adds its other files after the first) | a title containing any of its file names and "Notepad++" |
 | File Explorer | `explorer.exe "folder"` | window class `CabinetWClass` and the folder name in the title |
+| Google Chrome | `chrome.exe --new-window "https://a" "https://b"` (from `chrome_command`; several addresses give tabs in one window) | a visible window of class `Chrome_WidgetWin_1` belonging to `chrome.exe` that was not there before the setup started; the new process hands the window to the Chrome already running, so its ID cannot be used |
+
+Since a new Chrome window is only known by being new, Chrome windows are started one at a time: `start_next_chrome` starts the next one once the one before it has appeared, or after 6 seconds.
 
 PdfCraft's `--mode read` opens Read mode for that window, over its own default. With no `--zoom`, PdfCraft uses its default zoom, fit to width; its `--zoom` only takes a number, and an unknown option such as `--fit` is ignored with a warning in its log. A PdfCraft window started with `--control <file>` can be asked about its state with `pdfcraft-cli ui --control <file> state`, which is how these options were checked.
 
@@ -171,7 +175,7 @@ Windows 11 Notepad has no way for another program to save or close a tab, which 
 
 ## Saving and reopening a session
 
-`session.cpp` handles the tray menu items **Save and close all** and **Reopen last session**, and `crammy --save-and-close` and `crammy --reopen`. Study windows are every window of `pdfcraft.exe`, every Notepad++ window of class `Notepad++` and every Acrobat window of class `AcrobatSDIWindow`, whoever opened them.
+`session.cpp` handles the tray menu items **Save and close all** and **Reopen last session**, and `crammy --save-and-close` and `crammy --reopen`. Study windows are every window of `pdfcraft.exe`, every Notepad++ window of class `Notepad++` and every Acrobat window of class `AcrobatSDIWindow`, whoever opened them. Chrome windows are not study windows: the browser holds pages that have nothing to do with studying, so Save and close all never touches it.
 
 `save_and_close` records each window's program, desktop name and visible frame (for a minimized window, the frame it goes back to), and its files. For Notepad++ it goes through every tab, saves each one that has a file, and lists those files. An empty "new 1" tab is marked saved with Scintilla's `SCI_SETSAVEPOINT` (2014) so closing does not ask about it; a "new 1" tab with text keeps the whole window open, with a message. `SCI_GETLENGTH` (2006) tells the two apart; both are sent to the view's `Scintilla` child and take no pointers, so they work from another process. For PdfCraft and Acrobat the files are the PDFs on the process's command line, read with `NtQueryInformationProcess` class 60. Each window then gets `WM_CLOSE`; one still open after 5 seconds, for example one asking about unsaved changes, is named in a message.
 
@@ -326,6 +330,10 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 
 **Add a subject or setup**: use the main window, or edit `profiles.txt` and run `crammy.exe --check`.
 
+**The empty-side menu.** A click on a part of the screen picture with no tile on it calls the canvas's asker with the side and the start folder (`start_folder_for`: the subject's root, or Downloads when the root is missing). The usual asker, `ask_with_menu` in `canvas.cpp`, shows the menu and then the file, folder or address dialog. `item_for_answer` turns the answer into a window line: one PDF becomes `pdf`, several become `tabs`, a folder chosen for the newest PDF becomes `newest "<folder>\*.pdf"`, and the others become `sequence`, `pick`, `folder`, `web` or `notes`. The tests put their own asker in place with `set_side_asker`, so no menu or dialog appears. To add a choice, add it to `side_choice`, `item_for_answer` and the menu.
+
+**Splits.** The Split list in the main window offers `split_choices`, plus the setup's own split when it is another number. Choosing one calls `set_split`: a setup that matches its subject's split keeps no `split` line of its own, and a subject at 50 keeps none either. `set_canvas_split` moves the line between the sides in the picture, and drops and clicks use the same line.
+
 ## Rules for every change
 
 - Variables, fields and parameters are `snake_case`. Function and type names follow the existing code.
@@ -342,6 +350,8 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 - Program paths are fixed in `program_file`. If PdfCraft, Acrobat or Notepad++ moves, Crammy will report that no window appeared.
 - A saved session knows only the PDFs a PdfCraft or Acrobat window was started with. A PDF opened later in another tab of the same window is not remembered.
 - Save and close all closes study windows the owner opened by hand too. Never run it on his real windows without his say-so.
+- Web pages are not saved by Save and close all, so a reopened session has no Chrome windows.
+- A Chrome window that opens by itself while a setup is opening, such as one from a link clicked in another program, can be taken for the setup's window.
 - `newest` uses the modified date, so re-saving an old PDF makes it the newest.
 - When a separate copy of `crammy.exe` opens a setup with decks, the background Crammy does not learn of its windows, so a later next deck leaves the old deck window open under the new one.
 - Only one monitor is handled: everything uses the primary monitor's work area, and the panel assumes one as well.

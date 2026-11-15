@@ -8,6 +8,12 @@ Run `crammy.exe`. Setups are listed on the left and the middle shows a picture o
 
 To build a setup, press New setup, then drag PDFs or folders from File Explorer onto the picture. Dropping on the left or right third fills that half of the screen; the middle fills the whole screen. Tiles can be dragged from one side to the other. Right-click a tile to open it in Acrobat, or to make it always open the newest file like it, which suits weekly slides. A folder becomes a list you tick from each time you open the setup. Every change is saved straight away.
 
+You can also click an empty part of the picture. A menu asks what goes there: a PDF, the newest PDF in a folder (pick the lecture folder and it opens the latest slides each time), the next numbered lecture deck, PDFs to tick from a folder, a folder in File Explorer, a web page in Chrome, or answer notes. The file and folder dialogs start in the course's folder in Downloads.
+
+Web pages open in a new Google Chrome window, with several addresses as tabs. Drag a link or the address out of Chrome onto the picture, drop an Internet shortcut (`.url`), or pick Web page from the menu and type the address.
+
+The Split list above the picture sets how the screen is shared: 50 / 50, 60 / 40, 75 / 25, 40 / 60 or 25 / 75, with the left side first.
+
 Edit as text opens `profiles.txt` in a small editor for anything the picture does not cover.
 
 Notes open in Notepad++, in a window of their own, so each desktop gets its own notes. Each time a setup opens, Crammy saves and closes the notes it opened before, using commands Notepad++ accepts from other programs, so nothing comes to the front and no keys are pressed. A notes window with nothing else in it closes whole. Files you opened yourself stay open.
@@ -60,7 +66,7 @@ The next deck is reached from the panel only. Its `next deck` link reopens the P
 
 ## Before shutting down
 
-**Save and close all**, in the tray icon's menu, saves every file open in Notepad++, writes down every PdfCraft, Notepad++ and Acrobat window (its files, its desktop and where it sat on the screen) in `last session.txt`, and closes them all. It covers windows you opened yourself as well as Crammy's. A window it cannot close safely stays open and is named in the message afterwards, such as a Notepad++ tab with unsaved text and no file.
+**Save and close all**, in the tray icon's menu, saves every file open in Notepad++, writes down every PdfCraft, Notepad++ and Acrobat window (its files, its desktop and where it sat on the screen) in `last session.txt`, and closes them all. It covers windows you opened yourself as well as Crammy's. Chrome is left alone, since it holds browsing that has nothing to do with studying, so web pages from a setup are not reopened. A window it cannot close safely stays open and is named in the message afterwards, such as a Notepad++ tab with unsaved text and no file.
 
 At the next sign-in, Crammy asks once whether to reopen them. Each window goes back to its own desktop and its old place without the desktops switching. **Reopen last session** in the same menu does it again later. From a terminal, `crammy --save-and-close` and `crammy --reopen` do the same.
 
@@ -94,8 +100,9 @@ A side is `left` or `right`, or `full` for the whole screen. When several window
 | `pick "folder" "file"` | the PDFs you tick at launch |
 | `sequence "folder"` | one PdfCraft window with the next numbered lecture deck after the one last opened; before any was opened, the decks to tick |
 | `folder "folder"` | File Explorer |
+| `web "https://..." "https://..."` | a new Google Chrome window, one tab for each address |
 
-Ending a PDF line with `with acrobat` opens it in Adobe Acrobat in place of PdfCraft. Paths start from the root unless they are absolute. `*` matches any text in a file name, and variables such as `%USERPROFILE%` are expanded. Answer files go in `2 Practice` when the course has one. Set `notes folder = ...` to change that.
+A web address must start with `http://` or `https://`, and it is never joined to the root. Ending a PDF line with `with acrobat` opens it in Adobe Acrobat in place of PdfCraft. Paths start from the root unless they are absolute. `*` matches any text in a file name, and variables such as `%USERPROFILE%` are expanded. Answer files go in `2 Practice` when the course has one. Set `notes folder = ...` to change that.
 
 `desktop = 150` puts the setup's windows on the virtual desktop named 150, so each subject can keep its own desktop. The windows open on the desktop showing and move there as soon as they appear, so nothing switches while they open. Once they are in place, Crammy shows that desktop in one move. It reads the desktop names from the registry.
 

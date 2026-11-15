@@ -6,6 +6,7 @@
 
 #include <map>
 
+#include "dialogs.h"
 #include "files.h"
 #include "tiling.h"
 #include "ui.h"
@@ -36,6 +37,9 @@ struct canvas_state {
     int pressed_tile = -1;      // the tile under the held mouse button
     bool dragging = false;
     POINT press_point{};
+    int split = 50;             // the left side's share of the width in percent
+    side_asker asker = nullptr; // nullptr means the menu and dialogs below
+    bool tracking_leave = false;
 };
 
 canvas_state canvas;
@@ -74,7 +78,7 @@ RECT screen_area() {
 
 RECT zone_box( zone place ) {
     RECT screen = screen_area();
-    int middle = ( screen.left + screen.right ) / 2;
+    int middle = screen.left + ( screen.right - screen.left ) * canvas.split / 100;
     if ( place == zone_left ) return { screen.left, screen.top, middle, screen.bottom };
     if ( place == zone_right ) return { middle, screen.top, screen.right, screen.bottom };
     return screen;
@@ -84,7 +88,7 @@ RECT zone_box( zone place ) {
 zone zone_at( POINT point ) {
     RECT screen = screen_area();
     double x = double( point.x - screen.left ) / double( screen.right - screen.left );
-    if ( has_side( L"left" ) || has_side( L"right" ) ) return x < 0.5 ? zone_left : zone_right;
+    if ( has_side( L"left" ) || has_side( L"right" ) ) return x * 100 < canvas.split ? zone_left : zone_right;
     if ( x < 1.0 / 3.0 ) return zone_left;
     if ( x > 2.0 / 3.0 ) return zone_right;
     return zone_full;
@@ -137,6 +141,11 @@ void describe( tile &each, const written_item &item ) {
         each.opens = L"The next numbered deck";
         each.caption = L"In order, from " + folder_label( item.paths[0] );
         break;
+    case item_kind::web:
+        each.app = program::chrome;
+        each.opens = web_label( item.paths[0] );
+        if ( count > 1 ) each.caption = L"and " + std::to_wstring( count - 1 ) + L" more, as tabs";
+        break;
     }
 }
 
@@ -179,7 +188,7 @@ void set_hover( zone place ) {
 // Painting
 // ---------------------------------------------------------------------------
 
-const wchar_t *program_names[] = { L"PdfCraft", L"Adobe Acrobat", L"Notepad++", L"File Explorer" };
+const wchar_t *program_names[] = { L"PdfCraft", L"Adobe Acrobat", L"Notepad++", L"File Explorer", L"Google Chrome" };
 
 HICON program_icon( program app, int size ) {
     static std::map<std::pair<int, int>, HICON> icons;
@@ -232,10 +241,16 @@ void paint( HDC dc ) {
     }
 
     const wchar_t *empty_text = !canvas.items ? L"Choose a setup on the left"
-                              : canvas.items->empty() && canvas.hover == zone_none ? L"Drop PDFs or folders here"
+                              : canvas.items->empty() ? L"Click to choose, or drop PDFs, folders or links here"
                               : nullptr;
     if ( empty_text ) write( dc, empty_text, screen, canvas.font, RGB( 110, 110, 110 ), DT_CENTER | DT_VCENTER | DT_SINGLELINE );
     if ( !canvas.items ) return;
+
+    // A side with nothing on it says it can be clicked
+    for ( zone place : { zone_left, zone_right } ) {
+        bool empty = !canvas.items->empty() && !has_side( L"full" ) && !has_side( zone_sides[place] );
+        if ( empty ) write( dc, L"Click to add", zone_box( place ), canvas.font, RGB( 110, 110, 110 ), DT_CENTER | DT_VCENTER | DT_SINGLELINE );
+    }
 
     for ( size_t i = 0; i < canvas.tiles.size(); ++i ) {
         const tile &each = canvas.tiles[i];
@@ -270,16 +285,21 @@ void paint( HDC dc ) {
 // Changing items
 // ---------------------------------------------------------------------------
 
-void add_dropped( const vector<wstring> &paths, zone place ) {
+// paths are files and folders; addresses are web pages, from a link dragged out of a browser
+void add_dropped( const vector<wstring> &paths, zone place, vector<wstring> addresses = {} ) {
     vector<wstring> pdfs, folders, notes;
     for ( const wstring &path : paths ) {
         wstring stored = relative_to( canvas.root, path );
         if ( is_folder( path ) ) folders.push_back( stored );
         else if ( ends_with( lower( path ), L".pdf" ) ) pdfs.push_back( stored );
         else if ( ends_with( lower( path ), L".txt" ) ) notes.push_back( stored );
+        else if ( ends_with( lower( path ), L".url" ) ) {
+            wstring address = web_address( address_in_shortcut( read_text_file( path ) ) );
+            if ( !address.empty() ) addresses.push_back( address );
+        }
     }
-    if ( pdfs.empty() && folders.empty() && notes.empty() ) {
-        hint( L"Only PDFs, folders and .txt notes can go on the screen." );
+    if ( pdfs.empty() && folders.empty() && notes.empty() && addresses.empty() ) {
+        hint( L"Only PDFs, folders, .txt notes and web links can go on the screen." );
         return;
     }
 
@@ -288,10 +308,99 @@ void add_dropped( const vector<wstring> &paths, zone place ) {
     if ( pdfs.size() == 1 ) canvas.items->push_back( { side, item_kind::pdf, pdfs } );
     if ( pdfs.size() > 1 ) canvas.items->push_back( { side, item_kind::tabs, pdfs } );
     for ( const wstring &note : notes ) canvas.items->push_back( { side, item_kind::notes, { note } } );
+    if ( !addresses.empty() ) canvas.items->push_back( { side, item_kind::web, addresses } );
     changed();
 
     if ( !folders.empty() ) hint( L"A folder lets you tick which PDFs to open each time. Right-click it for more." );
+    else if ( pdfs.empty() && notes.empty() ) hint( L"Web pages open in a new Chrome window." );
     else hint( L"Right-click a tile to open it in Acrobat, or to always open the newest file like it." );
+}
+
+// ---------------------------------------------------------------------------
+// Clicking an empty part of the screen
+// ---------------------------------------------------------------------------
+
+enum side_menu_id { side_pdf = 1, side_newest, side_sequence, side_pick, side_folder, side_web, side_notes };
+
+// The usual asker: a menu of what can go there, then the dialog that choice needs
+side_answer ask_with_menu( HWND window, const wstring &, const wstring &start_folder ) {
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW( menu, MF_STRING, side_pdf, L"PDF\x2026" );
+    AppendMenuW( menu, MF_STRING, side_newest, L"Newest PDF in a folder\x2026" );
+    AppendMenuW( menu, MF_STRING, side_sequence, L"Next lecture deck in a folder\x2026" );
+    AppendMenuW( menu, MF_STRING, side_pick, L"Tick PDFs from a folder each time\x2026" );
+    AppendMenuW( menu, MF_SEPARATOR, 0, nullptr );
+    AppendMenuW( menu, MF_STRING, side_folder, L"Folder in File Explorer\x2026" );
+    AppendMenuW( menu, MF_STRING, side_web, L"Web page in Chrome\x2026" );
+    AppendMenuW( menu, MF_STRING, side_notes, L"Answer notes" );
+    POINT cursor;
+    GetCursorPos( &cursor );
+    int choice = TrackPopupMenu( menu, TPM_RETURNCMD, cursor.x, cursor.y, 0, window, nullptr );
+    DestroyMenu( menu );
+
+    side_answer answer;
+    HWND owner = GetAncestor( window, GA_ROOT );
+    switch ( choice ) {
+    case side_pdf:
+        answer.choice = side_choice::pdf;
+        answer.paths = ask_for_pdfs( owner, start_folder );
+        break;
+    case side_newest:
+    case side_sequence:
+    case side_pick:
+    case side_folder: {
+        const wchar_t *titles[] = { L"Folder to open the newest PDF from", L"Folder of numbered lecture decks",
+                                    L"Folder to tick PDFs from", L"Folder to open in File Explorer" };
+        const side_choice choices[] = { side_choice::newest, side_choice::sequence, side_choice::pick, side_choice::folder };
+        int index = choice - side_newest;
+        answer.choice = choices[index];
+        wstring folder = ask_for_folder( owner, start_folder, titles[index] );
+        if ( !folder.empty() ) answer.paths = { folder };
+        break;
+    }
+    case side_web: {
+        answer.choice = side_choice::web;
+        wstring typed = ask_for_address( owner );
+        if ( !typed.empty() ) answer.paths = { typed };
+        break;
+    }
+    case side_notes:
+        answer.choice = side_choice::notes;
+        answer.accepted = true;
+        return answer;
+    default:
+        return answer;
+    }
+    answer.accepted = !answer.paths.empty();
+    return answer;
+}
+
+// The side a point on the canvas would fill, or "" when it is not over an empty part of the screen
+wstring empty_side_under( POINT point ) {
+    if ( !canvas.items ) return L"";
+    RECT screen = screen_area();
+    if ( !PtInRect( &screen, point ) ) return L"";
+    double across = double( point.x - screen.left ) / double( screen.right - screen.left );
+    return empty_side_at( *canvas.items, across, canvas.split );
+}
+
+zone zone_named( const wstring &side ) {
+    return side == L"left" ? zone_left : side == L"right" ? zone_right : side == L"full" ? zone_full : zone_none;
+}
+
+void fill_empty_side( const wstring &side ) {
+    side_asker asker = canvas.asker ? canvas.asker : ask_with_menu;
+    side_answer answer = asker( canvas.window, side, start_folder_for( canvas.root ) );
+    if ( !answer.accepted || !canvas.items ) return;
+    written_item item;
+    wstring problem;
+    if ( !item_for_answer( answer, side, canvas.root, item, problem ) ) {
+        hint( problem.c_str() );
+        return;
+    }
+    canvas.items->push_back( item );
+    changed();
+    hint( L"Drag a tile to move it, or right-click it for more." );
 }
 
 void move_item( size_t index, zone place ) {
@@ -375,6 +484,27 @@ FORMATETC file_format() {
     return { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
 }
 
+// What a browser hands over when a link or the address is dragged out of it
+FORMATETC link_format() {
+    static CLIPFORMAT format = static_cast<CLIPFORMAT>( RegisterClipboardFormatW( L"UniformResourceLocatorW" ) );
+    return { format, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+}
+
+bool has_format( IDataObject *data, FORMATETC format ) {
+    return data->QueryGetData( &format ) == S_OK;
+}
+
+wstring dropped_link( IDataObject *data ) {
+    FORMATETC format = link_format();
+    STGMEDIUM medium{};
+    if ( FAILED( data->GetData( &format, &medium ) ) ) return L"";
+    const wchar_t *text = static_cast<const wchar_t *>( GlobalLock( medium.hGlobal ) );
+    wstring link = text ? wstring( text, wcsnlen( text, GlobalSize( medium.hGlobal ) / sizeof( wchar_t ) ) ) : L"";
+    GlobalUnlock( medium.hGlobal );
+    ReleaseStgMedium( &medium );
+    return web_address( link );
+}
+
 vector<wstring> dropped_paths( IDataObject *data ) {
     vector<wstring> paths;
     FORMATETC format = file_format();
@@ -406,8 +536,7 @@ public:
     ULONG STDMETHODCALLTYPE Release() override { return 1; }
 
     HRESULT STDMETHODCALLTYPE DragEnter( IDataObject *data, DWORD keys, POINTL point, DWORD *effect ) override {
-        FORMATETC format = file_format();
-        accepts_ = canvas.items && data->QueryGetData( &format ) == S_OK;
+        accepts_ = canvas.items && ( has_format( data, file_format() ) || has_format( data, link_format() ) );
         if ( !canvas.items ) hint( L"Pick a setup on the left first, or press New setup." );
         else if ( accepts_ ) hint( L"Let go over the part of the screen where it should open." );
         return DragOver( keys, point, effect );
@@ -425,7 +554,14 @@ public:
         zone place = zone_at( client_point( point ) );
         set_hover( zone_none );
         *effect = accepts_ ? DROPEFFECT_COPY : DROPEFFECT_NONE;
-        if ( accepts_ ) add_dropped( dropped_paths( data ), place );
+        if ( !accepts_ ) return S_OK;
+        if ( has_format( data, file_format() ) ) {
+            add_dropped( dropped_paths( data ), place );
+        } else {
+            wstring address = dropped_link( data );
+            if ( address.empty() ) hint( L"That link is not a web address." );
+            else add_dropped( {}, place, { address } );
+        }
         return S_OK;
     }
 
@@ -491,8 +627,32 @@ LRESULT CALLBACK canvas_proc( HWND window, UINT message, WPARAM wparam, LPARAM l
              ( std::abs( point.x - canvas.press_point.x ) > px( 6 ) || std::abs( point.y - canvas.press_point.y ) > px( 6 ) ) ) {
             canvas.dragging = true;
         }
-        if ( canvas.dragging ) set_hover( zone_at( point ) );
+        if ( canvas.dragging ) {
+            set_hover( zone_at( point ) );
+        } else if ( canvas.pressed_tile < 0 ) {
+            // An empty part of the screen lights up to show a click will fill it
+            set_hover( zone_named( empty_side_under( point ) ) );
+            if ( !canvas.tracking_leave ) {
+                TRACKMOUSEEVENT track{ sizeof( track ), TME_LEAVE, window, 0 };
+                canvas.tracking_leave = TrackMouseEvent( &track );
+            }
+        }
         return 0;
+    case WM_MOUSELEAVE:
+        canvas.tracking_leave = false;
+        if ( !canvas.dragging ) set_hover( zone_none );
+        return 0;
+    case WM_SETCURSOR:
+        if ( LOWORD( lparam ) == HTCLIENT && !canvas.dragging ) {
+            POINT cursor;
+            GetCursorPos( &cursor );
+            ScreenToClient( window, &cursor );
+            if ( !empty_side_under( cursor ).empty() ) {
+                SetCursor( LoadCursorW( nullptr, IDC_HAND ) );
+                return TRUE;
+            }
+        }
+        break;
     case WM_LBUTTONUP: {
         bool was_dragging = canvas.dragging;
         int index = canvas.pressed_tile;
@@ -503,6 +663,10 @@ LRESULT CALLBACK canvas_proc( HWND window, UINT message, WPARAM wparam, LPARAM l
         ReleaseCapture();
         if ( was_dragging && index >= 0 && place != zone_none ) move_item( canvas.tiles[index].item_index, place );
         else if ( index >= 0 ) hint( L"Drag a tile to move it, or right-click it for more." );
+        else if ( !was_dragging ) {
+            wstring side = empty_side_under( point );
+            if ( !side.empty() ) fill_empty_side( side );
+        }
         return 0;
     }
     case WM_CAPTURECHANGED:
@@ -562,6 +726,16 @@ void show_items( vector<written_item> *items, const wstring &root ) {
 
 IDropTarget *canvas_drop_target() {
     return &dropper;
+}
+
+void set_canvas_split( int split ) {
+    canvas.split = split >= 10 && split <= 90 ? split : 50;
+    lay_out_tiles();
+    if ( canvas.window ) InvalidateRect( canvas.window, nullptr, FALSE );
+}
+
+void set_side_asker( side_asker asker ) {
+    canvas.asker = asker;
 }
 
 void add_notes_tile() {

@@ -26,13 +26,14 @@ const wchar_t *header =
     L"#   pick \"folder\" \"file\"        tick PDFs from these each time you open the setup\r\n"
     L"#   sequence \"folder\"           the next numbered lecture deck in that folder, after the one last opened\r\n"
     L"#   folder \"folder\"             File Explorer on that folder\r\n"
+    L"#   web \"https://...\"           Google Chrome with that page; more addresses open as tabs\r\n"
     L"#\r\n"
     L"# Add  with acrobat  at the end of a PDF line to open it in Adobe Acrobat in place of PdfCraft.\r\n";
 
-const wchar_t *kind_words[] = { L"notes", L"pdf", L"tabs", L"pick", L"folder", L"newest", L"sequence" };
+const wchar_t *kind_words[] = { L"notes", L"pdf", L"tabs", L"pick", L"folder", L"newest", L"sequence", L"web" };
 
 bool read_kind( const wstring &word, item_kind &kind ) {
-    for ( int i = 0; i < 7; ++i ) {
+    for ( int i = 0; i < 8; ++i ) {
         if ( word == kind_words[i] ) {
             kind = static_cast<item_kind>( i );
             return true;
@@ -79,7 +80,17 @@ wstring check_count( item_kind kind, size_t count ) {
          kind == item_kind::sequence ) && count != 1 ) {
         return L"this takes exactly one path";
     }
-    if ( ( kind == item_kind::tabs || kind == item_kind::pick ) && count == 0 ) return L"this needs at least one path";
+    if ( ( kind == item_kind::tabs || kind == item_kind::pick || kind == item_kind::web ) && count == 0 )
+        return L"this needs at least one path";
+    return L"";
+}
+
+wstring check_addresses( const vector<wstring> &addresses ) {
+    for ( const wstring &address : addresses ) {
+        wstring start = lower( address.substr( 0, 8 ) );
+        if ( !starts_with( start, L"http://" ) && !starts_with( start, L"https://" ) )
+            return L"a web address must start with http:// or https://";
+    }
     return L"";
 }
 
@@ -132,7 +143,8 @@ setup build_setup( const profile_block &profile, size_t profile_index, int setup
     if ( own ) items.insert( items.end(), own->items.begin(), own->items.end() );
     for ( const written_item &item : items ) {
         layout_item resolved{ item.side, item.kind, {}, item.app };
-        for ( const wstring &path : item.paths ) resolved.paths.push_back( resolve( result.root, path ) );
+        for ( const wstring &path : item.paths )
+            resolved.paths.push_back( item.kind == item_kind::web ? path : resolve( result.root, path ) );
         result.items.push_back( resolved );
     }
     return result;
@@ -230,12 +242,13 @@ profile_book read_book( const wstring &text ) {
         wstring rest = ( space == wstring::npos ) ? L"" : value.substr( space + 1 );
         item_kind kind;
         if ( !read_kind( word, kind ) ) {
-            book.errors.push_back( where + L"unknown window '" + word + L"' (use notes, pdf, newest, tabs, pick, sequence or folder)" );
+            book.errors.push_back( where + L"unknown window '" + word + L"' (use notes, pdf, newest, tabs, pick, sequence, folder or web)" );
             continue;
         }
         viewer app = take_viewer( rest );
         vector<wstring> paths = read_paths( rest );
         wstring problem = check_count( kind, paths.size() );
+        if ( problem.empty() && kind == item_kind::web ) problem = check_addresses( paths );
         if ( !problem.empty() ) { book.errors.push_back( where + problem ); continue; }
         ( own ? own->items : profile->items ).push_back( { key, kind, paths, app } );
     }

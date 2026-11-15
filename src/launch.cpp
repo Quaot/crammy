@@ -55,6 +55,9 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
             notes_windows.push_back( { plan.size(), &item } );
             plan.push_back( { item.side, program::notepad_pp, {} } );
             continue;
+        case item_kind::web:
+            plan.push_back( { item.side, program::chrome, item.paths } );
+            continue;
         case item_kind::folder:
             if ( is_folder( item.paths[0] ) ) plan.push_back( { item.side, program::explorer, item.paths } );
             else problems.push_back( L"Folder not found: " + item.paths[0] );

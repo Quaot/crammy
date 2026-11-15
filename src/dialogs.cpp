@@ -1,6 +1,8 @@
 #include "dialogs.h"
 
 #include <commctrl.h>
+#include <shlobj.h>
+#include <shobjidl.h>
 
 #include <algorithm>
 #include <set>
@@ -311,4 +313,121 @@ pick_answer ask_for_picks( HWND owner, const setup &chosen ) {
     SetFocus( picker.filter_box );
     run_modal( window, owner );
     return picker.answer;
+}
+
+// ---------------------------------------------------------------------------
+// A web address
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct address_state {
+    HWND label = nullptr, box = nullptr, ok_button = nullptr, cancel_button = nullptr;
+    HFONT font = nullptr;
+    UINT dpi = 96;
+    wstring answer;
+};
+
+address_state address_dialog;
+
+LRESULT CALLBACK address_proc( HWND window, UINT message, WPARAM wparam, LPARAM lparam ) {
+    switch ( message ) {
+    case WM_SIZE: {
+        UINT dpi = address_dialog.dpi;
+        int pad = scaled( 12, dpi ), row = scaled( 28, dpi ), label = scaled( 70, dpi );
+        MoveWindow( address_dialog.label, pad, pad + scaled( 5, dpi ), label, row, TRUE );
+        MoveWindow( address_dialog.box, pad + label, pad, LOWORD( lparam ) - 2 * pad - label, row, TRUE );
+        int button_width = scaled( 90, dpi ), bottom = HIWORD( lparam ) - pad - row;
+        MoveWindow( address_dialog.cancel_button, LOWORD( lparam ) - pad - button_width, bottom, button_width, row, TRUE );
+        MoveWindow( address_dialog.ok_button, LOWORD( lparam ) - 2 * pad - 2 * button_width, bottom, button_width, row, TRUE );
+        return 0;
+    }
+    case WM_COMMAND:
+        if ( LOWORD( wparam ) == IDOK ) {
+            address_dialog.answer = text_of( address_dialog.box );
+            if ( address_dialog.answer.empty() ) {
+                MessageBeep( MB_ICONWARNING );
+                return 0;
+            }
+            DestroyWindow( window );
+        } else if ( LOWORD( wparam ) == IDCANCEL ) {
+            DestroyWindow( window );
+        }
+        return 0;
+    case WM_CLOSE:
+        DestroyWindow( window );
+        return 0;
+    case WM_DESTROY:
+        DeleteObject( address_dialog.font );
+        return 0;
+    }
+    return DefWindowProcW( window, message, wparam, lparam );
+}
+
+// Common item dialogs need COM on this thread; the canvas already has it for drag and drop
+vector<wstring> run_file_dialog( HWND owner, const wstring &start_folder, bool folders, const wchar_t *title ) {
+    vector<wstring> chosen;
+    IFileOpenDialog *dialog = nullptr;
+    if ( FAILED( CoCreateInstance( CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS( &dialog ) ) ) ) return chosen;
+    DWORD options = 0;
+    dialog->GetOptions( &options );
+    dialog->SetOptions( options | FOS_FORCEFILESYSTEM | ( folders ? FOS_PICKFOLDERS : FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST ) );
+    dialog->SetTitle( title );
+    if ( !folders ) {
+        COMDLG_FILTERSPEC filter = { L"PDFs", L"*.pdf" };
+        dialog->SetFileTypes( 1, &filter );
+    }
+    IShellItem *start = nullptr;
+    if ( SUCCEEDED( SHCreateItemFromParsingName( start_folder.c_str(), nullptr, IID_PPV_ARGS( &start ) ) ) ) {
+        dialog->SetFolder( start );
+        start->Release();
+    }
+    IShellItemArray *items = nullptr;
+    if ( SUCCEEDED( dialog->Show( owner ) ) && SUCCEEDED( dialog->GetResults( &items ) ) ) {
+        DWORD count = 0;
+        items->GetCount( &count );
+        for ( DWORD i = 0; i < count; ++i ) {
+            IShellItem *item = nullptr;
+            wchar_t *path = nullptr;
+            if ( SUCCEEDED( items->GetItemAt( i, &item ) ) && SUCCEEDED( item->GetDisplayName( SIGDN_FILESYSPATH, &path ) ) ) {
+                chosen.push_back( path );
+                CoTaskMemFree( path );
+            }
+            if ( item ) item->Release();
+        }
+        items->Release();
+    }
+    dialog->Release();
+    return chosen;
+}
+
+}  // namespace
+
+wstring ask_for_address( HWND owner ) {
+    address_dialog = {};
+    address_dialog.dpi = GetDpiForSystem();
+    UINT dpi = address_dialog.dpi;
+    HWND window = make_window( L"CrammyAddress", address_proc, L"Web page", scaled( 520, dpi ), scaled( 150, dpi ), owner,
+                               WS_POPUP | WS_CAPTION | WS_SYSMENU );
+    address_dialog.font = make_font( dpi, L"Segoe UI", 10 );
+    HFONT font = address_dialog.font;
+    address_dialog.label = add_control( window, WC_STATICW, L"Address", 0, 0, font );
+    address_dialog.box = add_control( window, WC_EDITW, L"", ES_AUTOHSCROLL | WS_TABSTOP, 0, font, WS_EX_CLIENTEDGE );
+    address_dialog.ok_button = add_control( window, WC_BUTTONW, L"OK", BS_DEFPUSHBUTTON | WS_TABSTOP, IDOK, font );
+    address_dialog.cancel_button = add_control( window, WC_BUTTONW, L"Cancel", WS_TABSTOP, IDCANCEL, font );
+    RECT client;
+    GetClientRect( window, &client );
+    SendMessageW( window, WM_SIZE, 0, MAKELPARAM( client.right, client.bottom ) );
+    SetFocus( address_dialog.box );
+    run_modal( window, owner );
+    return address_dialog.answer;
+}
+
+vector<wstring> ask_for_pdfs( HWND owner, const wstring &start_folder ) {
+    return run_file_dialog( owner, start_folder, false, L"Choose PDFs" );
+}
+
+wstring ask_for_folder( HWND owner, const wstring &start_folder, const wchar_t *title ) {
+    vector<wstring> chosen = run_file_dialog( owner, start_folder, true, title );
+    return chosen.empty() ? L"" : chosen[0];
 }
