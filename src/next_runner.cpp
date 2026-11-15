@@ -20,11 +20,18 @@ namespace {
 
 const UINT_PTR line_timer = 101;
 const UINT_PTR watch_timer = 102;
+const UINT_PTR desktop_timer = 103;
 const UINT line_every_ms = 10 * 1000;   // often enough that "in Nm" is never a minute behind
 const UINT watch_every_ms = 2 * 1000;
+const UINT desktop_every_ms = 500;      // the taskbar box follows a desktop switch within half a second
 
 HWND background = nullptr;
 bool busy = false;      // a Next or next deck is opening windows, or the tick list is open
+
+// The last line worked out, kept so a desktop switch can set the title without working it out again
+wstring last_line;
+bool last_next_can_act = false;
+int shown_desktop_index = -1;   // the desktop whose name is in the title, or -1
 
 // Every window Next opened in this run, with the file it shows
 vector<opened_window> records;
@@ -244,6 +251,29 @@ void check_watches() {
     }
 }
 
+// Sets the title from the last line and the given desktop, only when it differs from the one there
+void show_title( int desktop_index ) {
+    if ( !background ) return;
+    wstring desktop;
+    if ( desktop_index >= 0 ) {
+        vector<wstring> names = desktop_names();
+        if ( desktop_index < int( names.size() ) ) desktop = names[desktop_index];
+    }
+    wstring title = taskbar_title( desktop, last_line, last_next_can_act );
+
+    wstring current( GetWindowTextLengthW( background ) + 1, L' ' );
+    current.resize( GetWindowTextW( background, &current[0], int( current.size() ) ) );
+    if ( current != title ) SetWindowTextW( background, title.c_str() );
+}
+
+// Reads which desktop shows, which is a registry read, and sets the title again only when it changed
+void check_desktop() {
+    int index = current_desktop_index();
+    if ( index == shown_desktop_index ) return;
+    shown_desktop_index = index;
+    show_title( index );
+}
+
 void add_problem( wstring &problem, const wstring &more ) {
     if ( !more.empty() ) problem += ( problem.empty() ? L"" : L" " ) + more;
 }
@@ -330,11 +360,13 @@ void start_next_runner( HWND background_window ) {
     refresh_line();
     SetTimer( background, line_timer, line_every_ms, nullptr );
     SetTimer( background, watch_timer, watch_every_ms, nullptr );
+    SetTimer( background, desktop_timer, desktop_every_ms, nullptr );
 }
 
 void on_next_timer( UINT_PTR timer_id ) {
     if ( timer_id == line_timer ) refresh_line();
     else if ( timer_id == watch_timer ) check_watches();
+    else if ( timer_id == desktop_timer ) check_desktop();
 }
 
 void run_as_busy( const std::function<void()> &work ) {
@@ -358,8 +390,11 @@ void refresh_line() {
     next_class next = current_next( at );
     today_decks decks = decks_are_on( next );
     wstring deck = decks.on ? deck_label( decks.highest ) : L"";
-    wstring title = background_title( line_text( next, at.minute, deck ), next.found && next.known );
-    SetWindowTextW( background, title.c_str() );
+    last_line = line_text( next, at.minute, deck );
+    last_next_can_act = next.found && next.known;
+    // The names are read again here, so a renamed desktop shows within 10 seconds
+    shown_desktop_index = current_desktop_index();
+    show_title( shown_desktop_index );
 }
 
 void run_next() {

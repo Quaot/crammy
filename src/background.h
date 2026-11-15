@@ -18,6 +18,10 @@ bool ask_running_crammy_for_next();     // posts next_message() to the CrammyBac
 // The title Crammy gives its hidden window: the line, with "-" in front when Next would do nothing.
 wstring background_title( const wstring &line, bool next_can_act );
 
+// The whole title: the current desktop's name, a tab, then the line, with "-" in front of it all when Next
+// would do nothing. The desktop name is cut to 12 characters. With no desktop name it is background_title( line ).
+wstring taskbar_title( const wstring &desktop, const wstring &line, bool next_can_act );
+
 struct recorded_window {
     wstring path;   // the file the window shows
     bool alive;     // the window still exists

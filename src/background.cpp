@@ -250,6 +250,14 @@ wstring background_title( const wstring &line, bool next_can_act ) {
     return next_can_act ? line : L"-" + line;
 }
 
+wstring taskbar_title( const wstring &desktop, const wstring &line, bool next_can_act ) {
+    if ( desktop.empty() ) return background_title( line, next_can_act );
+    // The taskbar box has room for about 12 characters, so a longer name ends in an ellipsis.
+    wstring name = desktop;
+    if ( name.size() > 12 ) name = name.substr( 0, 11 ) + L"\x2026";
+    return background_title( name + L"\t" + line, next_can_act );
+}
+
 bool all_already_open( const vector<wstring> &files, const vector<recorded_window> &windows ) {
     if ( files.empty() ) return false;
     for ( const wstring &file : files ) {

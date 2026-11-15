@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.4
+// @version         0.5
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -16,19 +16,23 @@
 Hides the Widgets button at the left end of the taskbar and puts Crammy's line
 in its place, in two small rows like the weather's: the next class on top, such
 as `MATH 117 tut`, and where and when below it, such as `Mon 08:30 · DWE 1515`.
-The `▸` button to the right of the rows is the next button. The line is read
-from Crammy every two seconds.
+To the left of the rows, the name of the virtual desktop showing is written in
+bold white on a red box, such as `150`. The `▸` button to the right of the rows
+is the next button. The line is read from Crammy every half second, so the box
+changes soon after a switch to another desktop.
 
 A click on the rows opens the Crammy panel. A click on `▸` goes to that class's
 desktop and opens its slides, as Next does in Crammy. The next button is greyed
 when Next has nothing to open for the class.
 
 When Crammy is not running, the top row reads `Crammy is not running` with the
-next button greyed, and a click on it starts `crammy.exe --panel`.
+next button greyed and no desktop box, and a click on it starts
+`crammy.exe --panel`.
 
-The whole line, `▸` included, is kept within the width set as `line_width`,
-220 by default, so it stays in the space the Widgets button had, before the
-Start button. A row that does not fit ends in an ellipsis.
+The whole line, the box and `▸` included, is kept within the width set as
+`line_width`, 270 by default, so it stays in the space the Widgets button had,
+before the Start button. A row that does not fit ends in an ellipsis. A width
+saved by an older version stays until it is changed in the settings.
 
 Switch the mod off to bring the Widgets button back.
 */
@@ -39,7 +43,7 @@ Switch the mod off to bring the Widgets button back.
 - crammy_path: C:\Users\Justin\Desktop\Projects\Crammy\crammy.exe
   $name: Path to crammy.exe
   $description: The program to start when Crammy is not running.
-- line_width: 220
+- line_width: 270
   $name: Width of the line
   $description: The widest the line may be, the next button included, in pixels at 100% scaling. Lower it if the line reaches the Start button.
 */
@@ -56,6 +60,7 @@ Switch the mod off to bring the Widgets button back.
 
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.UI.Text.h>
 #include <winrt/Windows.UI.Xaml.Automation.h>
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
@@ -67,7 +72,7 @@ using namespace winrt::Windows::UI::Xaml;
 
 const wchar_t line_name[] = L"CrammyLine";
 const wchar_t not_running_text[] = L"Crammy is not running";
-const int default_line_width = 220;
+const int default_line_width = 270;
 
 struct placed_line {
     winrt::weak_ref<Controls::Grid> panel;
@@ -119,16 +124,26 @@ void set_text( Controls::TextBlock text, const std::wstring &value ) {
     }
 }
 
-// Crammy keeps the line as the title of its CrammyBackground window, with a
-// newline between its two rows. A title starting with "-" means Next has
-// nothing to open for that class.
-void refresh_line( Controls::TextBlock top, Controls::TextBlock bottom, Controls::Button next ) {
+void set_shown( UIElement element, bool shown ) {
+    Visibility wanted = shown ? Visibility::Visible : Visibility::Collapsed;
+    if ( element.Visibility() != wanted ) {
+        element.Visibility( wanted );
+    }
+}
+
+// Crammy keeps the line as the title of its CrammyBackground window: the
+// desktop's name, a tab, then the line, with a newline between its two rows.
+// A title starting with "-" means Next has nothing to open for that class.
+// A title with no tab has no desktop name, and the box is hidden.
+void refresh_line( Controls::Border box, Controls::TextBlock desktop, Controls::TextBlock top,
+                   Controls::TextBlock bottom, Controls::Button next ) {
     std::wstring line = not_running_text;
+    std::wstring desktop_name;
     bool can_next = false;
     if ( HWND crammy_window = FindWindowW( L"CrammyBackground", nullptr ) ) {
         // The window belongs to another process, so GetWindowTextW reads the
         // stored title and sends Crammy no message; a hung Crammy cannot block it.
-        wchar_t title[128] = {};
+        wchar_t title[256] = {};
         GetWindowTextW( crammy_window, title, ARRAYSIZE( title ) );
         line = title;
         can_next = true;
@@ -136,22 +151,26 @@ void refresh_line( Controls::TextBlock top, Controls::TextBlock bottom, Controls
             line.erase( 0, 1 );
             can_next = false;
         }
+        size_t tab = line.find( L'\t' );
+        if ( tab != std::wstring::npos ) {
+            desktop_name = line.substr( 0, tab );
+            line.erase( 0, tab + 1 );
+        }
         if ( line.empty() ) {
             // The window may have closed after FindWindowW found it.
             line = L"Crammy";
             can_next = false;
         }
     }
+    set_text( desktop, desktop_name );
+    set_shown( box, !desktop_name.empty() );
     // A line of one row, such as "No classes", leaves the bottom row hidden.
     size_t newline = line.find( L'\n' );
     std::wstring top_row = line.substr( 0, newline );
     std::wstring bottom_row = newline == std::wstring::npos ? L"" : line.substr( newline + 1 );
     set_text( top, top_row );
     set_text( bottom, bottom_row );
-    Visibility bottom_shown = bottom_row.empty() ? Visibility::Collapsed : Visibility::Visible;
-    if ( bottom.Visibility() != bottom_shown ) {
-        bottom.Visibility( bottom_shown );
-    }
+    set_shown( bottom, !bottom_row.empty() );
     if ( next.IsEnabled() != can_next ) {
         next.IsEnabled( can_next );
     }
@@ -200,6 +219,25 @@ Controls::TextBlock make_row() {
     return row;
 }
 
+// The desktop's name in bold white on PdfCraft's red, so the desktop showing
+// can be seen at a glance. It starts hidden, until a title with a name is read.
+Controls::Border make_desktop_box( Controls::TextBlock name ) {
+    name.FontSize( 14 );
+    name.FontWeight( winrt::Windows::UI::Text::FontWeights::SemiBold() );
+    name.Foreground( Media::SolidColorBrush( winrt::Windows::UI::Color{ 255, 0xFF, 0xFF, 0xFF } ) );
+    name.TextWrapping( TextWrapping::NoWrap );
+    name.VerticalAlignment( VerticalAlignment::Center );
+    Controls::Border box;
+    box.Child( name );
+    box.Background( Media::SolidColorBrush( winrt::Windows::UI::Color{ 255, 0xB7, 0x02, 0x28 } ) );
+    box.CornerRadius( CornerRadius{ 4, 4, 4, 4 } );
+    box.Padding( Thickness{ 6, 2, 6, 2 } );
+    box.Margin( Thickness{ 0, 0, 2, 0 } );
+    box.VerticalAlignment( VerticalAlignment::Center );
+    box.Visibility( Visibility::Collapsed );
+    return box;
+}
+
 void add_line( Controls::Grid root_grid ) {
     // The taskbar can drop its tree, for example when a monitor goes away.
     std::erase_if( g_lines, []( placed_line &placed ) {
@@ -217,6 +255,9 @@ void add_line( Controls::Grid root_grid ) {
             return;
         }
     }
+    Controls::TextBlock desktop;
+    Controls::Border box = make_desktop_box( desktop );
+
     Controls::TextBlock top = make_row();
     Controls::TextBlock bottom = make_row();
     bottom.Opacity( 0.8 );
@@ -233,26 +274,32 @@ void add_line( Controls::Grid root_grid ) {
     Controls::Button next_button = make_button( next_text, 4 );
     Automation::AutomationProperties::SetName( next_button, L"Next class" );
 
-    // The whole line, padding and next button included, stays within
-    // line_width: the rows take what the next button leaves and are cut short.
+    // The whole line, padding, box and next button included, stays within
+    // line_width: the rows take what the box and the next button leave and
+    // are cut short.
+    Controls::ColumnDefinition box_column;
+    box_column.Width( GridLengthHelper::Auto() );
     Controls::ColumnDefinition rows_column;
     rows_column.Width( GridLengthHelper::FromValueAndType( 1, GridUnitType::Star ) );
     Controls::ColumnDefinition next_column;
     next_column.Width( GridLengthHelper::Auto() );
     Controls::Grid panel;
     panel.Name( line_name );
+    panel.ColumnDefinitions().Append( box_column );
     panel.ColumnDefinitions().Append( rows_column );
     panel.ColumnDefinitions().Append( next_column );
     panel.Padding( Thickness{ 4, 0, 0, 0 } );
     panel.MaxWidth( g_line_width );
     panel.HorizontalAlignment( HorizontalAlignment::Left );
     panel.VerticalAlignment( VerticalAlignment::Center );
-    Controls::Grid::SetColumn( text_button, 0 );
-    Controls::Grid::SetColumn( next_button, 1 );
+    Controls::Grid::SetColumn( box, 0 );
+    Controls::Grid::SetColumn( text_button, 1 );
+    Controls::Grid::SetColumn( next_button, 2 );
+    panel.Children().Append( box );
     panel.Children().Append( text_button );
     panel.Children().Append( next_button );
 
-    refresh_line( top, bottom, next_button );
+    refresh_line( box, desktop, top, bottom, next_button );
 
     placed_line placed;
     placed.panel = winrt::make_weak( panel );
@@ -271,22 +318,27 @@ void add_line( Controls::Grid root_grid ) {
         }
     } );
     // The timer runs on the taskbar's thread, so its ticks may touch the XAML.
+    // Reading the title sends Crammy no message, so every half second is cheap,
+    // and the box follows a desktop switch soon after it.
     placed.timer = DispatcherTimer();
-    placed.timer.Interval( std::chrono::seconds( 2 ) );
+    placed.timer.Interval( std::chrono::milliseconds( 500 ) );
     placed.tick = placed.timer.Tick( winrt::auto_revoke,
-        [weak_top = winrt::make_weak( top ), weak_bottom = winrt::make_weak( bottom ),
+        [weak_box = winrt::make_weak( box ), weak_desktop = winrt::make_weak( desktop ),
+         weak_top = winrt::make_weak( top ), weak_bottom = winrt::make_weak( bottom ),
          weak_next = winrt::make_weak( next_button )]( auto const &sender, auto && ) {
-            auto top = weak_top.get();
-            auto bottom = weak_bottom.get();
-            auto next = weak_next.get();
-            if ( g_unloading || !top || !bottom || !next ) {
-                if ( auto timer = sender.template try_as<DispatcherTimer>() ) {
-                    timer.Stop();
-                }
-                return;
-            }
             try {
-                refresh_line( top, bottom, next );
+                auto box = weak_box.get();
+                auto desktop = weak_desktop.get();
+                auto top = weak_top.get();
+                auto bottom = weak_bottom.get();
+                auto next = weak_next.get();
+                if ( g_unloading || !box || !desktop || !top || !bottom || !next ) {
+                    if ( auto timer = sender.template try_as<DispatcherTimer>() ) {
+                        timer.Stop();
+                    }
+                    return;
+                }
+                refresh_line( box, desktop, top, bottom, next );
             } catch ( ... ) {
                 Wh_Log( L"Refreshing the line failed" );
             }

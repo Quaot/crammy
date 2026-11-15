@@ -46,6 +46,8 @@ The timetable is `timetable.txt` and the settings are `settings.txt`, both next 
 
 With the Windhawk mod switched on, the taskbar shows the next class where the weather was, in two small rows like the weather's. The top row names the class, such as `ECE 150 Lecture`, and the row under it says where and when, such as `PSE 5353 · in 5m`. For a class on another day, the bottom row starts with its weekday and start time, as in `Tue 10:30 · DWE 3516`. A row longer than 24 characters is cut short with an ellipsis. The line names the class on now, or else the next one today. After the last class of the day, it shows the first class of the next day with classes. Crammy works the line out again every 10 seconds.
 
+At the left of the line, a red box shows the name of the virtual desktop you are on in bold white, such as `150` or `Main`. A name longer than 12 characters ends in an ellipsis. Crammy checks the desktop every half second, so the box changes soon after you switch. With the mod's width setting saved from an older version, raise `line_width` to 270 in Windhawk if the rows look short.
+
 Pressing `▸`, to the right of the two rows, goes to that class's desktop and opens its setup, as a class click in the panel does. When every file of the setup is already showing in windows Next opened, it only switches. For a course with no folder in Downloads, the button is greyed.
 
 After Next opens a setup, Crammy watches the folder of every `newest` line until midnight or the next press of Next. A newer download that fits the pattern opens over the old slides once its size has stopped changing, and the window with the old slides closes. This happens only while that desktop is showing, and Crammy closes only windows it opened itself.
