@@ -22,6 +22,7 @@ wstring move_window_to_desktop( HWND window, const wstring &name );
 - Moving a window to the desktop it is already on returns "" and changes nothing.
 - A name that matches no desktop (compared without regard to case) returns a message that contains the name in single quotes, and the window stays where it was.
 - A handle that is not a window (for example `nullptr`, or a window already destroyed) returns a non-empty message and does nothing else.
+- A window Explorer has not put on any desktop yet (an application window made but never shown) returns a message containing `not on any desktop yet`, and is not moved. Once it has been shown (`SW_SHOWNOACTIVATE`) and Explorer reports it on the desktop showing, moving it to another desktop returns "". Crammy relies on this: a new program's window can appear a moment before Explorer takes it in, so a move that fails is tried again on the next pass until the windows settle, and only reported if it never works.
 
 Test with a window of the test program: an ordinary visible application window (`WS_EX_APPWINDOW`, no `WS_EX_TOOLWINDOW`, no `WS_EX_NOACTIVATE`), off screen, 200 by 100, unique title, shown with `SW_SHOWNOACTIVATE`. When there are fewer than two desktops, the tests that need a second desktop pass with a check that says they were skipped. Pick as the other desktop any desktop that is not the one showing.
 

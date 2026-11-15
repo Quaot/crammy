@@ -23,10 +23,15 @@ void register_window_class() {
     RegisterClassW( &window_class );
 }
 
+// An ordinary application window, made off screen and left hidden, so Explorer has not put it on a desktop.
+HWND make_unshown_window( const wstring &title ) {
+    return CreateWindowExW( WS_EX_APPWINDOW, window_class_name, title.c_str(), WS_OVERLAPPEDWINDOW,
+                            -32000, -32000, 200, 100, nullptr, nullptr, GetModuleHandleW( nullptr ), nullptr );
+}
+
 // An ordinary application window, made off screen so it never appears on the owner's screen.
 HWND make_window( const wstring &title ) {
-    HWND window = CreateWindowExW( WS_EX_APPWINDOW, window_class_name, title.c_str(), WS_OVERLAPPEDWINDOW,
-                                   -32000, -32000, 200, 100, nullptr, nullptr, GetModuleHandleW( nullptr ), nullptr );
+    HWND window = make_unshown_window( title );
     if ( window )
         ShowWindow( window, SW_SHOWNOACTIVATE );
     return window;
@@ -102,6 +107,39 @@ void check_not_a_window( int showing ) {
     check( current_desktop_index() == showing, "Moving a destroyed window leaves the same desktop showing." );
 }
 
+void check_window_never_shown( const vector<wstring> &names, int showing ) {
+    HWND window = make_unshown_window( unique_title( L"Crammy unshown desktop setups check" ) );
+    check( window != nullptr, "The hidden off-screen test window was made." );
+    if ( !window ) return;
+
+    int target = names.size() < 2 ? showing : ( showing == 0 ? 1 : 0 );
+    wstring problem = move_window_to_desktop( window, names[target] );
+    check( problem.find( L"not on any desktop yet" ) != wstring::npos,
+           "Moving a window that was never shown returns a problem saying it is not on any desktop yet." );
+    check( current_desktop_index() == showing, "Moving a window that was never shown leaves the same desktop showing." );
+
+    ShowWindow( window, SW_SHOWNOACTIVATE );
+    for ( int wait = 0; wait < 20 && desktop_of( window ) != showing; ++wait ) Sleep( 100 );
+    check( desktop_of( window ) == showing,
+           "Within 2 seconds of being shown, the once hidden window is reported on the desktop showing." );
+
+    if ( names.size() < 2 ) {
+        check( true, "There is only one desktop, so moving the once hidden window to another desktop is skipped." );
+    } else {
+        wstring shown_problem = move_window_to_desktop( window, names[target] );
+        check( shown_problem.empty(), "Once shown, the once hidden window moves to another desktop with no problem." );
+        check( desktop_of( window ) == target, "After that move, the once hidden window is reported on the other desktop." );
+        check( current_desktop_index() == showing, "Moving the once hidden window leaves the same desktop showing." );
+
+        wstring back_problem = move_window_to_desktop( window, names[showing] );
+        check( back_problem.empty(), "Moving the once hidden window back to the desktop showing returns no problem." );
+        check( desktop_of( window ) == showing, "The once hidden window is back on the desktop showing." );
+    }
+
+    DestroyWindow( window );
+    check( current_desktop_index() == showing, "The desktop showing is the same after the checks on a window never shown." );
+}
+
 void check_moving_windows() {
     int showing = current_desktop_index();
     vector<wstring> names = desktop_names();
@@ -120,6 +158,7 @@ void check_moving_windows() {
 
     DestroyWindow( window );
     check_not_a_window( showing );
+    check_window_never_shown( names, showing );
     check( current_desktop_index() == showing, "The desktop showing is the same after all the window moving checks." );
 }
 
