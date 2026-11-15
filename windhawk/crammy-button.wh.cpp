@@ -2,7 +2,7 @@
 // @id              crammy-button
 // @name            Crammy button
 // @description     Replaces the Widgets button with Crammy's line and a next button
-// @version         0.7
+// @version         0.8
 // @author          Justin Gu
 // @include         explorer.exe
 // @architecture    x86-64
@@ -81,8 +81,11 @@ struct placed_line {
     winrt::weak_ref<Controls::Grid> panel;
     Controls::Primitives::ButtonBase::Click_revoker text_click;
     Controls::Primitives::ButtonBase::Click_revoker next_click;
-    DispatcherTimer timer{ nullptr };
-    DispatcherTimer::Tick_revoker tick;
+    winrt::weak_ref<Controls::Border> box;
+    winrt::weak_ref<Controls::TextBlock> desktop;
+    winrt::weak_ref<Controls::TextBlock> top;
+    winrt::weak_ref<Controls::TextBlock> bottom;
+    winrt::weak_ref<Controls::Button> next;
 };
 
 std::wstring g_crammy_path;
@@ -90,6 +93,10 @@ std::atomic<int> g_line_width{ default_line_width };
 std::atomic<bool> g_unloading;
 std::atomic<bool> g_taskbar_view_hooked;
 std::vector<placed_line> g_lines;
+// One Windows timer on the taskbar's thread refreshes every line. A XAML
+// DispatcherTimer did not tick in the taskbar's XAML host, so the line only
+// changed when the mod was reloaded.
+UINT_PTR g_refresh_timer = 0;
 std::vector<winrt::weak_ref<FrameworkElement>> g_hidden_widgets;
 FrameworkElement::Loaded_revoker g_loaded_revoker;
 
@@ -179,6 +186,28 @@ void refresh_line( Controls::Border box, Controls::TextBlock desktop, Controls::
     }
 }
 
+// Runs on the taskbar's thread every half second: SetTimer with no window calls
+// it from the message loop of the thread that set it, which is the taskbar's.
+void CALLBACK refresh_all_lines( HWND, UINT, UINT_PTR, DWORD ) {
+    if ( g_unloading ) {
+        return;
+    }
+    try {
+        for ( auto &placed : g_lines ) {
+            auto box = placed.box.get();
+            auto desktop = placed.desktop.get();
+            auto top = placed.top.get();
+            auto bottom = placed.bottom.get();
+            auto next = placed.next.get();
+            if ( box && desktop && top && bottom && next ) {
+                refresh_line( box, desktop, top, bottom, next );
+            }
+        }
+    } catch ( ... ) {
+        Wh_Log( L"Refreshing the line failed" );
+    }
+}
+
 FrameworkElement find_child( FrameworkElement element, PCWSTR name, bool by_class ) {
     int count = Media::VisualTreeHelper::GetChildrenCount( element );
     for ( int i = 0; i < count; i++ ) {
@@ -252,13 +281,7 @@ Controls::Border make_desktop_box( Controls::TextBlock name ) {
 void add_line( Controls::Grid root_grid ) {
     // The taskbar can drop its tree, for example when a monitor goes away.
     std::erase_if( g_lines, []( placed_line &placed ) {
-        if ( placed.panel.get() ) {
-            return false;
-        }
-        if ( placed.timer ) {
-            placed.timer.Stop();
-        }
-        return true;
+        return !placed.panel.get();
     } );
     // A line already in the tree is either this load's, which stays, or one left
     // behind by an older load whose unload could not reach the taskbar thread.
@@ -340,33 +363,19 @@ void add_line( Controls::Grid root_grid ) {
             Wh_Log( L"Sending Next failed" );
         }
     } );
-    // The timer runs on the taskbar's thread, so its ticks may touch the XAML.
+    placed.box = winrt::make_weak( box );
+    placed.desktop = winrt::make_weak( desktop );
+    placed.top = winrt::make_weak( top );
+    placed.bottom = winrt::make_weak( bottom );
+    placed.next = winrt::make_weak( next_button );
     // Reading the title sends Crammy no message, so every half second is cheap,
-    // and the box follows a desktop switch soon after it.
-    placed.timer = DispatcherTimer();
-    placed.timer.Interval( std::chrono::milliseconds( 500 ) );
-    placed.tick = placed.timer.Tick( winrt::auto_revoke,
-        [weak_box = winrt::make_weak( box ), weak_desktop = winrt::make_weak( desktop ),
-         weak_top = winrt::make_weak( top ), weak_bottom = winrt::make_weak( bottom ),
-         weak_next = winrt::make_weak( next_button )]( auto const &sender, auto && ) {
-            try {
-                auto box = weak_box.get();
-                auto desktop = weak_desktop.get();
-                auto top = weak_top.get();
-                auto bottom = weak_bottom.get();
-                auto next = weak_next.get();
-                if ( g_unloading || !box || !desktop || !top || !bottom || !next ) {
-                    if ( auto timer = sender.template try_as<DispatcherTimer>() ) {
-                        timer.Stop();
-                    }
-                    return;
-                }
-                refresh_line( box, desktop, top, bottom, next );
-            } catch ( ... ) {
-                Wh_Log( L"Refreshing the line failed" );
-            }
-        } );
-    placed.timer.Start();
+    // and the desktop name follows a switch soon after it.
+    if ( !g_refresh_timer ) {
+        g_refresh_timer = SetTimer( nullptr, 0, 500, refresh_all_lines );
+        if ( !g_refresh_timer ) {
+            Wh_Log( L"Could not start the refresh timer, error %u", GetLastError() );
+        }
+    }
     // Added last, so an error above leaves nothing in the taskbar's tree.
     root_grid.Children().Append( panel );
     g_lines.push_back( std::move( placed ) );
@@ -406,11 +415,11 @@ bool replace_widgets( FrameworkElement widgets ) {
 
 void restore_all() {
     g_loaded_revoker.revoke();
+    if ( g_refresh_timer ) {
+        KillTimer( nullptr, g_refresh_timer );
+        g_refresh_timer = 0;
+    }
     for ( auto &placed : g_lines ) {
-        if ( placed.timer ) {
-            placed.timer.Stop();
-        }
-        placed.tick.revoke();
         placed.text_click.revoke();
         placed.next_click.revoke();
         auto line = placed.panel.get();
