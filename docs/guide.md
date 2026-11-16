@@ -87,7 +87,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
 | `tests/check.cpp`, `tests/check.h` | `check()`, which prints one line and counts a failure |
-| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions` and `setup_options` |
+| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions`, `setup_options` and `background_log` |
 | `tests/specs/*.md` | One spec for each area |
 | `tests/test.cmd` | Builds the checks and runs them |
 | `windhawk/crammy-button.wh.cpp` | The Windhawk mod that shows Crammy's line on the taskbar, with the current desktop's name before it, plain, with a thin line after it; `windhawk/README.md` says how to add it |
@@ -194,6 +194,8 @@ The record goes to `last session.txt` next to the exe (not committed), with `ask
 `--panel` starts the new copy itself with `CreateProcessW` and `DETACHED_PROCESS`, from the folder of `crammy.exe`. The copy then keeps running when whatever ran `--panel` ends, such as a taskbar button. If the start fails, it is tried once more with `CREATE_BREAKAWAY_FROM_JOB` added. An earlier version started it through `explorer.exe`, which can drop the arguments.
 
 **The window and the message.** `run_background` in `background.cpp` makes a hidden top-level window of the class `CrammyBackground`. Anything that wants the panel finds that window and posts it the registered message `CrammyShowPanel` (`show_panel_message()`, from `RegisterWindowMessageW`). With a wparam of 0 the window calls `toggle_panel`, which shows the panel or hides it. `--panel` and the Windhawk mod both send 0 (`--panel` through `ask_running_crammy_to_toggle_panel`). `--background --show` sends 1 through `ask_running_crammy_to_show_panel`, and the window then calls `show_panel`, which opens the panel and leaves an open one as it is. Keep the class name and the message name as they are: the mod has them written in.
+
+**Staying up, and the log.** On 2026-11-15 the background copy started at sign-in and was gone a minute later, with no crash recorded by Windows. The hidden window now ignores `WM_CLOSE`, since Quit in the tray menu destroys the window itself and any close request must come from another program. `WM_ENDSESSION` is logged and ignored. The background copy writes `background log.txt` next to `crammy.exe` (not committed, last 200 lines): `started, process N` at start, then `ignored a request to close`, `Windows is ending the session`, `stopped: Quit was chosen`, `stopped`, or a crash line. An unhandled exception filter writes `crashed with exception 0x... at crammy.exe+0x...`, and a terminate handler writes `ended by an uncaught C++ exception: ...`, because neither leaves a Windows crash report for this program. When the taskbar says Crammy is not running, read that file first. The spec is `tests/specs/background_log.md`.
 
 **One copy only.** `run_background` first takes the named mutex `CrammyBackgroundLock` and holds it until the process ends. A second copy finds the mutex taken and exits. The mutex covers two launches at the same moment, before either has made its window; `background_is_running` only looks for the window.
 
@@ -342,7 +344,7 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 - Commit messages and documentation use plain words and short sentences. Avoid figures of speech, including saying a file "lives" somewhere; say where it is. Avoid lists of exactly three items in prose; use two, or split the sentence.
 - Write the spec and the blind tests first (see Testing), then the code. A failing test is fixed in the code; a spec is corrected before any test that follows it.
 - Run `git pull --rebase --autostash` before pushing, and read the push output; a rejected push can look like success if the output is hidden.
-- `crammy.exe`, `tests\crammy_test.exe`, `last setup.txt`, `notes opened.txt`, `places.txt` and `decks today.txt` are not committed.
+- `crammy.exe`, `tests\crammy_test.exe`, `background log.txt`, `last setup.txt`, `notes opened.txt`, `places.txt` and `decks today.txt` are not committed.
 - When a change makes this guide or the README wrong, fix them in the same commit. Remove a Known limits entry as soon as the limit is gone.
 
 ## Known limits

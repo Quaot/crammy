@@ -4,6 +4,9 @@
 #include <objbase.h>
 #include <shellapi.h>
 
+#include <cstdio>
+#include <exception>
+
 #include "next_runner.h"
 #include "panel.h"
 #include "session.h"
@@ -27,6 +30,32 @@ const UINT menu_save_and_close = 5;
 const UINT menu_reopen = 6;
 
 UINT taskbar_created_message = 0;
+
+void log_now( const wstring &text ) {
+    SYSTEMTIME now;
+    GetLocalTime( &now );
+    append_log( background_log_path(), log_line( now, text ), 200 );
+}
+
+// A crash leaves no report from Windows for this program, so it is written down here
+LONG WINAPI log_crash( EXCEPTION_POINTERS *info ) {
+    auto address = reinterpret_cast<unsigned long long>( info->ExceptionRecord->ExceptionAddress );
+    auto base = reinterpret_cast<unsigned long long>( GetModuleHandleW( nullptr ) );
+    log_now( crash_text( info->ExceptionRecord->ExceptionCode, address >= base ? address - base : address ) );
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+void log_uncaught() {
+    wstring what = L"unknown";
+    try {
+        if ( std::exception_ptr error = std::current_exception() ) std::rethrow_exception( error );
+    } catch ( const std::exception &error ) {
+        what = from_utf8( error.what() );
+    } catch ( ... ) {
+    }
+    log_now( L"ended by an uncaught C++ exception: " + what );
+    std::abort();
+}
 
 HWND find_background_window() {
     return FindWindowW( background_class_name, nullptr );
@@ -175,7 +204,10 @@ void show_tray_menu( HWND window ) {
     else if ( chosen == menu_start_at_sign_in ) flip_start_at_sign_in();
     else if ( chosen == menu_save_and_close ) save_and_close_everything();
     else if ( chosen == menu_reopen ) reopen_last_session();
-    else if ( chosen == menu_quit ) DestroyWindow( window );
+    else if ( chosen == menu_quit ) {
+        log_now( L"stopped: Quit was chosen" );
+        DestroyWindow( window );
+    }
 }
 
 LRESULT CALLBACK background_proc( HWND window, UINT message, WPARAM wparam, LPARAM lparam ) {
@@ -204,7 +236,15 @@ LRESULT CALLBACK background_proc( HWND window, UINT message, WPARAM wparam, LPAR
     case WM_HOTKEY:
         if ( wparam == hotkey_id ) toggle_panel();
         return 0;
+    case WM_CLOSE:
+        // Quit destroys the window itself, so a request to close can only come from another program
+        log_now( L"ignored a request to close" );
+        return 0;
+    case WM_ENDSESSION:
+        if ( wparam ) log_now( L"Windows is ending the session" );
+        return 0;
     case WM_DESTROY:
+        log_now( L"stopped" );
         UnregisterHotKey( window, hotkey_id );
         remove_tray_icon( window );
         PostQuitMessage( 0 );
@@ -214,6 +254,45 @@ LRESULT CALLBACK background_proc( HWND window, UINT message, WPARAM wparam, LPAR
 }
 
 }  // namespace
+
+LRESULT CALLBACK background_window_proc( HWND window, UINT message, WPARAM wparam, LPARAM lparam ) {
+    return background_proc( window, message, wparam, lparam );
+}
+
+wstring background_log_path() {
+    return join_path( parent_folder( program_path() ), L"background log.txt" );
+}
+
+wstring log_line( const SYSTEMTIME &at, const wstring &text ) {
+    wchar_t stamp[32];
+    swprintf( stamp, 32, L"%04u-%02u-%02u %02u:%02u:%02u  ", at.wYear, at.wMonth, at.wDay, at.wHour, at.wMinute, at.wSecond );
+    return stamp + text;
+}
+
+wstring crash_text( DWORD code, unsigned long long offset ) {
+    wchar_t text[96];
+    swprintf( text, 96, L"crashed with exception 0x%08lX at crammy.exe+0x%llX", static_cast<unsigned long>( code ), offset );
+    return text;
+}
+
+void append_log( const wstring &path, const wstring &line, size_t keep ) {
+    vector<wstring> lines;
+    wstring old = read_text_file( path );
+    size_t start = 0;
+    while ( start < old.size() ) {
+        size_t end = old.find( L'\n', start );
+        if ( end == wstring::npos ) end = old.size();
+        wstring each = old.substr( start, end - start );
+        if ( !each.empty() && each.back() == L'\r' ) each.pop_back();
+        lines.push_back( each );
+        start = end + 1;
+    }
+    lines.push_back( line );
+    size_t first = lines.size() > keep ? lines.size() - keep : 0;
+    wstring text;
+    for ( size_t i = first; i < lines.size(); ++i ) text += lines[i] + L"\r\n";
+    write_text_file( path, text );
+}
 
 UINT show_panel_message() {
     static UINT message = RegisterWindowMessageW( L"CrammyShowPanel" );
@@ -312,6 +391,9 @@ int run_background( bool show_panel_now ) {
     // The dash greys the mod's next until the first line is set
     HWND window = CreateWindowExW( 0, background_class_name, L"-Crammy", WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, instance, nullptr );
     if ( !window ) return 1;
+    SetUnhandledExceptionFilter( log_crash );
+    std::set_terminate( log_uncaught );
+    log_now( L"started, process " + std::to_wstring( GetCurrentProcessId() ) );
 
     set_start_at_sign_in( current_settings().start_at_sign_in );
     taskbar_created_message = RegisterWindowMessageW( L"TaskbarCreated" );

@@ -36,3 +36,18 @@ bool watch_has_ended( calendar_date started, calendar_date today );
 bool set_start_at_sign_in( bool on );
 wstring startup_shortcut_path();    // CRAMMY_STARTUP_FOLDER, when set, replaces the Startup folder
 int run_background( bool show_panel_now );
+
+// The hidden window's procedure, declared so the tests can make a window that uses it.
+LRESULT CALLBACK background_window_proc( HWND window, UINT message, WPARAM wparam, LPARAM lparam );
+
+// background log.txt, next to crammy.exe: when the background copy started and why it stopped.
+wstring background_log_path();
+
+// One line of the log: "2026-11-15 20:01:19  text", with two spaces after the time.
+wstring log_line( const SYSTEMTIME &at, const wstring &text );
+
+// What a crash is logged as: "crashed with exception 0xC0000005 at crammy.exe+0x1A2B3".
+wstring crash_text( DWORD code, unsigned long long offset );
+
+// Adds line and a line break to the file at path, keeping only the last keep lines.
+void append_log( const wstring &path, const wstring &line, size_t keep );
