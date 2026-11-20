@@ -45,7 +45,7 @@ Clicking a class goes to the desktop named after its course number, and makes th
 
 Open the panel with Ctrl+Alt+C or with the Crammy icon in the tray. A click on Crammy's line on the taskbar opens it as well. That line comes from a Windhawk mod (see `windhawk\README.md`), and the shortcut and the tray icon work without it.
 
-These work while Crammy runs in the background. Start it with `crammy --background`, or choose Start at sign-in in the tray menu to make a shortcut in the Startup folder that does so each time you sign in. `crammy --panel` shows the panel and starts the background copy first when it is not running.
+These work while Crammy runs in the background. Start it with `crammy --background`, or choose Start at sign-in in the tray menu to make a Task Scheduler task that does so as soon as you sign in. `crammy --panel` shows the panel and starts the background copy first when it is not running.
 
 The timetable is `timetable.txt` and the settings are `settings.txt`, both next to the exe. The settings file may be missing; `docs/guide.md` lists its keys and says how to copy a new term's classes from Quest into the timetable.
 

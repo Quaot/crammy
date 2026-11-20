@@ -28,6 +28,7 @@ void test_subjects();
 void test_panel();
 void test_background();
 void test_background_log();
+void test_sign_in_task();
 void test_desktops();
 void test_next_line();
 void test_slide_watch();
@@ -284,6 +285,7 @@ int wmain( int argument_count, wchar_t **arguments ) {
     test_panel();
     test_background();
     test_background_log();
+    test_sign_in_task();
     test_desktops();
     test_next_line();
     test_slide_watch();

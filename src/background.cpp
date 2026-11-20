@@ -3,6 +3,8 @@
 #include <shlobj.h>
 #include <objbase.h>
 #include <shellapi.h>
+#include <taskschd.h>
+#include <oleauto.h>
 
 #include <cstdio>
 #include <exception>
@@ -71,6 +73,65 @@ bool shortcut_exists() {
     return is_file( startup_shortcut_path() );
 }
 
+wstring escape_xml( const wstring &text ) {
+    wstring escaped;
+    for ( wchar_t c : text ) {
+        if ( c == L'&' ) escaped += L"&amp;";
+        else if ( c == L'<' ) escaped += L"&lt;";
+        else if ( c == L'>' ) escaped += L"&gt;";
+        else escaped += c;
+    }
+    return escaped;
+}
+
+// Calls use with the root folder of Task Scheduler; false when Task Scheduler cannot be reached.
+template <typename use_folder>
+bool with_task_folder( use_folder use ) {
+    HRESULT started = CoInitialize( nullptr );
+    bool done = false;
+    ITaskService *service = nullptr;
+    if ( SUCCEEDED( CoCreateInstance( CLSID_TaskScheduler, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS( &service ) ) ) ) {
+        VARIANT empty;
+        VariantInit( &empty );
+        ITaskFolder *folder = nullptr;
+        BSTR root = SysAllocString( L"\\" );
+        if ( SUCCEEDED( service->Connect( empty, empty, empty, empty ) ) && SUCCEEDED( service->GetFolder( root, &folder ) ) ) {
+            done = use( folder );
+            folder->Release();
+        }
+        SysFreeString( root );
+        service->Release();
+    }
+    if ( SUCCEEDED( started ) ) CoUninitialize();
+    return done;
+}
+
+bool register_sign_in_task() {
+    wstring exe = join_path( parent_folder( program_path() ), L"crammy.exe" );
+    wstring xml = sign_in_task_xml( exe, current_account() );
+    return with_task_folder( [&]( ITaskFolder *folder ) {
+        BSTR name = SysAllocString( sign_in_task_name().c_str() );
+        BSTR text = SysAllocString( xml.c_str() );
+        VARIANT empty;
+        VariantInit( &empty );
+        IRegisteredTask *task = nullptr;
+        HRESULT result = folder->RegisterTask( name, text, TASK_CREATE_OR_UPDATE, empty, empty, TASK_LOGON_INTERACTIVE_TOKEN, empty, &task );
+        if ( task ) task->Release();
+        SysFreeString( text );
+        SysFreeString( name );
+        return SUCCEEDED( result );
+    } );
+}
+
+bool remove_sign_in_task() {
+    return with_task_folder( []( ITaskFolder *folder ) {
+        BSTR name = SysAllocString( sign_in_task_name().c_str() );
+        HRESULT result = folder->DeleteTask( name, 0 );
+        SysFreeString( name );
+        return SUCCEEDED( result ) || result == HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND );
+    } );
+}
+
 bool make_shortcut( const wstring &path ) {
     HRESULT started = CoInitialize( nullptr );
     bool made = false;
@@ -99,7 +160,7 @@ crammy_settings current_settings() {
 void flip_start_at_sign_in() {
     vector<wstring> errors;
     crammy_settings settings = read_settings( read_text_file( settings_path() ), errors );
-    settings.start_at_sign_in = !shortcut_exists();
+    settings.start_at_sign_in = !start_at_sign_in_is_on();
     // Rewriting a file with mistakes in it would replace the lines that could not be read.
     if ( errors.empty() ) write_text_file( settings_path(), write_settings( settings ) );
     set_start_at_sign_in( settings.start_at_sign_in );
@@ -187,7 +248,7 @@ void show_tray_menu( HWND window ) {
     HMENU menu = CreatePopupMenu();
     AppendMenuW( menu, MF_STRING, menu_setups, L"Setups\x2026" );
     AppendMenuW( menu, MF_STRING, menu_timetable, L"Edit timetable" );
-    AppendMenuW( menu, MF_STRING | ( shortcut_exists() ? MF_CHECKED : 0 ), menu_start_at_sign_in, L"Start at sign-in" );
+    AppendMenuW( menu, MF_STRING | ( start_at_sign_in_is_on() ? MF_CHECKED : 0 ), menu_start_at_sign_in, L"Start at sign-in" );
     AppendMenuW( menu, MF_STRING, menu_save_and_close, L"Save and close all" );
     AppendMenuW( menu, MF_STRING | ( has_saved_session( session ) ? 0 : MF_GRAYED ), menu_reopen, L"Reopen last session" );
     AppendMenuW( menu, MF_SEPARATOR, 0, nullptr );
@@ -369,10 +430,92 @@ wstring startup_shortcut_path() {
     return path.empty() ? L"" : join_path( path, L"Crammy.lnk" );
 }
 
+wstring sign_in_task_name() {
+    wchar_t name[256];
+    DWORD length = GetEnvironmentVariableW( L"CRAMMY_SIGN_IN_TASK", name, 256 );
+    if ( length > 0 && length < 256 ) return wstring( name, length );
+    return L"Crammy";
+}
+
+wstring sign_in_task_xml( const wstring &exe, const wstring &user ) {
+    wstring command = escape_xml( exe );
+    wstring folder = escape_xml( parent_folder( exe ) );
+    wstring account = escape_xml( user );
+    return L"<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n"
+           L"<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
+           L"  <RegistrationInfo><Description>Starts Crammy in the background when you sign in.</Description></RegistrationInfo>\r\n"
+           L"  <Triggers>\r\n"
+           L"    <LogonTrigger>\r\n"
+           L"      <Enabled>true</Enabled>\r\n"
+           L"      <UserId>" + account + L"</UserId>\r\n"
+           L"    </LogonTrigger>\r\n"
+           L"  </Triggers>\r\n"
+           L"  <Principals>\r\n"
+           L"    <Principal id=\"Author\">\r\n"
+           L"      <UserId>" + account + L"</UserId>\r\n"
+           L"      <LogonType>InteractiveToken</LogonType>\r\n"
+           L"      <RunLevel>LeastPrivilege</RunLevel>\r\n"
+           L"    </Principal>\r\n"
+           L"  </Principals>\r\n"
+           L"  <Settings>\r\n"
+           L"    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n"
+           L"    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n"
+           L"    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n"
+           L"    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\r\n"
+           L"    <Priority>5</Priority>\r\n"
+           L"    <Enabled>true</Enabled>\r\n"
+           L"  </Settings>\r\n"
+           L"  <Actions Context=\"Author\">\r\n"
+           L"    <Exec>\r\n"
+           L"      <Command>" + command + L"</Command>\r\n"
+           L"      <Arguments>--background</Arguments>\r\n"
+           L"      <WorkingDirectory>" + folder + L"</WorkingDirectory>\r\n"
+           L"    </Exec>\r\n"
+           L"  </Actions>\r\n"
+           L"</Task>\r\n";
+}
+
+wstring current_account() {
+    wchar_t computer[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD computer_length = MAX_COMPUTERNAME_LENGTH + 1;
+    wchar_t user[257];
+    DWORD user_length = 257;
+    if ( !GetComputerNameW( computer, &computer_length ) || !GetUserNameW( user, &user_length ) ) return L"";
+    return wstring( computer, computer_length ) + L"\\" + user;
+}
+
+wstring registered_sign_in_task_xml() {
+    wstring xml;
+    with_task_folder( [&]( ITaskFolder *folder ) {
+        BSTR name = SysAllocString( sign_in_task_name().c_str() );
+        IRegisteredTask *task = nullptr;
+        if ( SUCCEEDED( folder->GetTask( name, &task ) ) ) {
+            BSTR text = nullptr;
+            if ( SUCCEEDED( task->get_Xml( &text ) ) && text ) xml = text;
+            SysFreeString( text );
+            task->Release();
+        }
+        SysFreeString( name );
+        return true;
+    } );
+    return xml;
+}
+
+bool sign_in_task_exists() {
+    return !registered_sign_in_task_xml().empty();
+}
+
+bool start_at_sign_in_is_on() {
+    return sign_in_task_exists() || shortcut_exists();
+}
+
 bool set_start_at_sign_in( bool on ) {
     wstring path = startup_shortcut_path();
+    bool shortcut_gone = path.empty() || DeleteFileW( path.c_str() ) || GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+    if ( !on ) return remove_sign_in_task() && shortcut_gone;
+    if ( register_sign_in_task() ) return true;
+    // Without Task Scheduler the Startup folder still starts Crammy, only later
     if ( path.empty() ) return false;
-    if ( !on ) return DeleteFileW( path.c_str() ) || GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
     CreateDirectoryW( parent_folder( path ).c_str(), nullptr );
     return make_shortcut( path );
 }

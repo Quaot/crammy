@@ -33,8 +33,30 @@ bool all_already_open( const vector<wstring> &files, const vector<recorded_windo
 // True once the day has changed since the watch started, so watches end at midnight.
 bool watch_has_ended( calendar_date started, calendar_date today );
 
+// The name of the sign-in task: L"Crammy", or the value of CRAMMY_SIGN_IN_TASK when that is set.
+wstring sign_in_task_name();
+
+// The Task Scheduler XML for a task that runs exe with --background when user signs in.
+wstring sign_in_task_xml( const wstring &exe, const wstring &user );
+
+// The account Crammy runs as, in the form COMPUTER\name.
+wstring current_account();
+
+// True when a task named sign_in_task_name() is registered in the root folder of Task Scheduler.
+bool sign_in_task_exists();
+
+// The XML of the registered task, as Task Scheduler gives it back; "" when there is none.
+wstring registered_sign_in_task_xml();
+
+// On: registers the sign-in task for the current account, running crammy.exe from the folder of the
+// running program, and removes the old Startup shortcut. Off: removes the task and the shortcut.
+// When the task cannot be registered, the Startup shortcut is made instead.
 bool set_start_at_sign_in( bool on );
-wstring startup_shortcut_path();    // CRAMMY_STARTUP_FOLDER, when set, replaces the Startup folder
+
+// True when the task or the old Startup shortcut exists. The tray menu ticks Start at sign-in by it.
+bool start_at_sign_in_is_on();
+
+wstring startup_shortcut_path();    // the old shortcut; CRAMMY_STARTUP_FOLDER, when set, replaces the Startup folder
 int run_background( bool show_panel_now );
 
 // The hidden window's procedure, declared so the tests can make a window that uses it.

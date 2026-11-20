@@ -9,6 +9,6 @@ g++ -std=c++17 -O2 -s -static -municode -mwindows -DUNICODE -D_UNICODE -DNOMINMA
     src\launch.cpp src\session.cpp src\notes_tabs.cpp src\desktops.cpp src\tiling.cpp src\files.cpp src\profiles.cpp src\side_choices.cpp src\text.cpp ^
     src\timetable.cpp src\settings.cpp src\subjects.cpp src\panel_model.cpp src\next_line.cpp src\slide_watch.cpp src\sequence.cpp src\next_runner.cpp src\background.cpp src\panel.cpp ^
     crammy.res -o crammy.exe ^
-    -lcomctl32 -lcomdlg32 -ldwmapi -lole32 -luuid -lshell32 -lruntimeobject || exit /b 1
+    -lcomctl32 -lcomdlg32 -ldwmapi -lole32 -luuid -lshell32 -lruntimeobject -ltaskschd -loleaut32 || exit /b 1
 del crammy.res
 echo Built crammy.exe

@@ -19,7 +19,7 @@ Paths in this guide are relative to the repo folder unless they start with a dri
 | `timetable.txt` | Next to `crammy.exe`; committed. One line for each class block, copied from Quest |
 | `places.txt` | Next to `crammy.exe`; not committed. The last lecture deck reached for each `sequence` setup, such as `ECE 150: Lecture = 3.02 Linear search.pdf` |
 | `decks today.txt` | Next to `crammy.exe`; not committed. The lecture decks opened for each `sequence` setup on its last day of use, in the order they were opened, such as `ECE 150: Lecture = 2026-11-16 \| 3.02 Linear search.pdf ; 3.03 Binary search.pdf` |
-| Startup shortcut | `Crammy.lnk` in the user's Startup folder, running `crammy.exe --background`; made and removed by the tray menu |
+| Sign-in task | A Task Scheduler task named `Crammy` that runs `crammy.exe --background` when the user signs in; made and removed by the tray menu. It replaced the old `Crammy.lnk` in the Startup folder, which Crammy now deletes |
 | Windhawk mod | `windhawk\crammy-button.wh.cpp`, added to Windhawk by hand; it shows the current desktop's name and Crammy's line in two rows, with the faint `›` next button, on the taskbar |
 | Course files | `C:\Users\Justin\Downloads\<course>`, such as `Downloads\ECE 190`. File names follow `Downloads\Index.md` (`ECE190-W10-Slides.pdf`, `MATH117-L23.pdf`) |
 | Compiler | MSYS2 UCRT64 g++ at `C:\msys64\ucrt64\bin` |
@@ -35,6 +35,8 @@ Run these from the repo folder, with `.\` in front. This machine sets `NoDefault
 ```
 
 Run all three after every change. `build.cmd` uses `-Wall`, and the code builds with no warnings; keep it that way. A new source file goes into the file lists of both `build.cmd` and `tests\test.cmd`.
+
+While the background copy runs, `crammy.exe` is in use and the build cannot replace it. Choose Quit in the tray menu (or end the process) before building, then start it again with `schtasks /run /tn Crammy`. Do not rename or move `crammy.exe` to get it out of the way: the taskbar follows the rename and changes its pinned Crammy to the renamed file. On 2026-11-15 a rename into a temporary folder left the pin opening an old build from there.
 
 The Testing section below says how the checks are written and what they need on this machine.
 
@@ -82,12 +84,12 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/subjects.cpp` | Matching a class to a desktop name and to a setup, plus two small helpers: `kind_name`, the word for a class kind (only used to fill `today_row`), and the check for a course folder in Downloads |
 | `src/panel_model.cpp` | What the panel shows and does, as plain data with no window: today's rows and the desktop tiles, and the plan for a class click (the types are in `panel_model.h`) |
 | `src/panel.cpp` | The panel window; `toggle_panel` in `panel.h` shows it or hides it, and `show_panel` only shows it |
-| `src/background.cpp` | Background mode: the hidden `CrammyBackground` window and its messages, the tray icon, the shortcut, the one-copy lock and the Startup shortcut |
+| `src/background.cpp` | Background mode: the hidden `CrammyBackground` window and its messages, the tray icon, the shortcut, the one-copy lock and the sign-in task |
 | `src/ui.cpp` | Fonts, DPI scaling, window creation, the message loop |
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
 | `tests/check.cpp`, `tests/check.h` | `check()`, which prints one line and counts a failure |
-| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions`, `setup_options`, `background_log` and `pages` |
+| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions`, `setup_options`, `background_log`, `sign_in_task` and `pages` |
 | `tests/specs/*.md` | One spec for each area |
 | `tests/test.cmd` | Builds the checks and runs them |
 | `windhawk/crammy-button.wh.cpp` | The Windhawk mod that shows Crammy's line on the taskbar, with the current desktop's name before it, plain, with a thin line after it; `windhawk/README.md` says how to add it |
@@ -202,9 +204,13 @@ The record goes to `last session.txt` next to the exe (not committed), with `ask
 
 **The shortcut.** It is registered with `RegisterHotKey` from the `shortcut` setting, and the default is Ctrl+Alt+C. The setting is read once, when the background copy starts, so a change needs a restart of it. If another program already owns the keys, registering fails without any message and the tray icon still works.
 
-**The tray icon.** A left click shows or hides the panel. A right click opens a menu with Setups, Edit timetable (opens `timetable.txt` in Notepad++), Start at sign-in (ticked when the Startup shortcut exists; choosing it flips `start at sign in` in `settings.txt` and makes or removes the shortcut) and Quit. The icon is added again when Explorer restarts.
+**The tray icon.** A left click shows or hides the panel. A right click opens a menu with Setups, Edit timetable (opens `timetable.txt` in Notepad++), Start at sign-in (ticked when the sign-in task or an old Startup shortcut exists; choosing it flips `start at sign in` in `settings.txt` and makes or removes the task) and Quit. The icon is added again when Explorer restarts.
 
-**Start at sign-in.** `set_start_at_sign_in` makes or removes `Crammy.lnk` in the user's Startup folder. The background Crammy calls it when it starts, so the shortcut matches the `start at sign in` setting. The shortcut runs `crammy.exe --background` from the folder of the running program. The folder comes from `FOLDERID_Startup`, unless the environment variable `CRAMMY_STARTUP_FOLDER` is set; then that folder is used. The tests set it to a folder in `%TEMP%` so that they never touch the real Startup folder. Do not set it for any other reason.
+**Start at sign-in.** `set_start_at_sign_in` registers or removes a Task Scheduler task named `Crammy`, in the root folder, with a sign-in trigger for the current account (`current_account()`, `COMPUTER\name`). The background Crammy calls it when it starts, so the task matches the `start at sign in` setting. The task runs `crammy.exe --background` from the folder of the running program. Its XML comes from `sign_in_task_xml`: no delay, interactive token, least privilege, ignore a second start, allowed on battery and not stopped by it, no time limit (the default of three days would end Crammy) and priority 5 (the default of 7 is below normal). A user without admin rights may register it, because the trigger and the task's user are their own account; `schtasks /sc onlogon` is refused without admin, since it makes a trigger for any user.
+
+The task replaced a shortcut in the Startup folder on 2026-11-16. Windows runs the Startup folder late, after every program under the Run key, and on this machine the background copy started 80 to 140 seconds after sign-in; until then the taskbar line said Crammy was not running. Turning the task on deletes the old `Crammy.lnk`. If the task cannot be registered, Crammy makes that shortcut instead, so it still starts, only later.
+
+`CRAMMY_SIGN_IN_TASK` replaces the task name and `CRAMMY_STARTUP_FOLDER` replaces the Startup folder. The tests set them to `Crammy check` and a folder in `%TEMP%` so that they never touch the real task or folder. Do not set them for any other reason. The spec is `tests/specs/sign_in_task.md`.
 
 **The panel.** It is a borderless window, about 300 pixels wide, that opens above the bottom-left corner of the taskbar. Its height comes from what it shows, and it grows upward from the taskbar. It closes when it loses focus or Esc is pressed. `docs/panel-design.md` is the approved design; the owner made the panel smaller and plainer after it was built, and the end of that file says how.
 

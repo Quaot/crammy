@@ -30,6 +30,8 @@ int run_background( bool show_panel_now );      // not called by tests
 
 **Start at sign-in**
 
+Replaced on 2026-11-16 by `tests\specs\sign_in_task.md`: Crammy now starts at sign-in from a Task Scheduler task, and these shortcut checks are gone from `tests\test_background.cpp`. They are kept here only as a record.
+
 - With `CRAMMY_STARTUP_FOLDER` set to `%TEMP%\crammy startup check`, `startup_shortcut_path()` is `<that folder>\Crammy.lnk`.
 - `set_start_at_sign_in( true )` returns true and creates that file. It is a shortcut (read it with `IShellLinkW`) whose target is the running test program's own folder followed by `\crammy.exe`, and whose arguments are `--background`.
 - Calling `set_start_at_sign_in( true )` again returns true and still leaves one file.

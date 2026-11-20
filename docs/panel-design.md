@@ -39,7 +39,7 @@ Switching subjects should take one click from the bottom-left corner of the task
 
 ### Crammy in the background
 
-- `crammy.exe --background` starts Crammy with no window: a tray icon, a keyboard shortcut and a hidden message window of class `CrammyBackground`. It is started at sign-in by a shortcut in the Startup folder, through `explorer.exe` so that it is not tied to whatever started it.
+- `crammy.exe --background` starts Crammy with no window: a tray icon, a keyboard shortcut and a hidden message window of class `CrammyBackground`. It is started at sign-in by a Task Scheduler task named `Crammy` (a shortcut in the Startup folder until 2026-11-16, which started it over a minute late).
 - Only one background Crammy runs. Starting `crammy.exe --panel` while it runs tells it to show the panel and exits; if none is running, it starts one and shows the panel.
 - The shortcut is Ctrl+Alt+C (my call; the owner can change it). It is registered with `RegisterHotKey`, so nothing else is listening to the keyboard.
 - The tray icon opens the panel on a left click. A right click gives a menu with Setups…, Edit timetable, Start at sign-in (on or off) and Quit.
