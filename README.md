@@ -73,7 +73,7 @@ At the next sign-in, Crammy asks once whether to reopen them. Each window goes b
 
 ## Profiles
 
-`profiles.txt` sits next to the exe. A profile names a root folder. Its setups say what opens on each side.
+`profiles.txt` sits next to the exe. It is not in this repo; copy `profiles.example.txt` to `profiles.txt` to start. A profile names a root folder. Its setups say what opens on each side.
 
 ```
 [ECE 150]

@@ -14,6 +14,7 @@ Paths in this guide are relative to the repo folder unless they start with a dri
 |---|---|
 | Source | `C:\Users\Justin\Desktop\Projects\Crammy` (repo `github.com/Quaot/crammy`, branch `main`) |
 | The program | `crammy.exe` in the repo folder, next to `profiles.txt`; built, not committed |
+| `profiles.txt` | Next to `crammy.exe`; not in this repo. It is kept in the private repo `github.com/Quaot/crammy-profiles` (see The profile file) |
 | Desktop shortcut | `C:\Users\Justin\Desktop\Crammy.lnk`, pointing at `crammy.exe` |
 | `settings.txt` | Next to `crammy.exe`; not committed. It holds the panel shortcut and the Youtonomous program and videos. It also says whether to start at sign-in. Every key has a default, so the file may be missing |
 | `timetable.txt` | Next to `crammy.exe`; committed. One line for each class block, copied from Quest |
@@ -99,7 +100,7 @@ Answer keys are hidden from the tick list until its "Show answer keys" box is ti
 
 ## The profile file
 
-`profiles.txt` sits next to `crammy.exe`. The main window rewrites the whole file on every change, using `write_book` in `profiles.cpp`. Only the header comment at the top survives a rewrite; comments written anywhere else are lost. The tests check that reading and writing the file loses nothing else.
+`profiles.txt` sits next to `crammy.exe`. It is not in this repo, because the owner's setups name private documents. It has a private repo of its own, `github.com/Quaot/crammy-profiles`, whose git folder is `.profiles` in the repo folder (ignored here). Commit a change to it with `git --git-dir=.profiles --work-tree=. commit -am "..."` and push it the same way. `profiles.example.txt` is a sample to copy to `profiles.txt` on a new machine. The main window rewrites the whole file on every change, using `write_book` in `profiles.cpp`. Only the header comment at the top survives a rewrite; comments written anywhere else are lost. The tests check that reading and writing the file loses nothing else.
 
 ```
 [ECE 190]
@@ -351,6 +352,7 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 - Commit messages and documentation use plain words and short sentences. Avoid figures of speech, including saying a file "lives" somewhere; say where it is. Avoid lists of exactly three items in prose; use two, or split the sentence.
 - Write the spec and the blind tests first (see Testing), then the code. A failing test is fixed in the code; a spec is corrected before any test that follows it.
 - Run `git pull --rebase --autostash` before pushing, and read the push output; a rejected push can look like success if the output is hidden.
+- `profiles.txt` goes to its private repo, never to this one.
 - `crammy.exe`, `tests\crammy_test.exe`, `background log.txt`, `last setup.txt`, `notes opened.txt`, `places.txt` and `decks today.txt` are not committed.
 - When a change makes this guide or the README wrong, fix them in the same commit. Remove a Known limits entry as soon as the limit is gone.
 
