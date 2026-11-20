@@ -6,6 +6,7 @@ struct setup_request {
     wstring title;              // the text after --setup
     vector<wstring> picks;      // the texts after --pick that follow this --setup
     bool separate = false;      // --separate after this --setup
+    int page = 0;               // --page N after this --setup; 0 when not given
 };
 
 struct command_line {

@@ -53,15 +53,17 @@ wstring quoted( const wstring &text ) {
     return L"\"" + text + L"\"";
 }
 
-wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file ) {
+wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file, int page ) {
     wstring command = quoted( program_file( program::pdfcraft ) ) + L" --new-window --mode read";
     if ( !control_file.empty() ) command += L" --control " + quoted( control_file );
+    if ( page > 0 ) command += L" --page " + std::to_wstring( page );
     for ( const wstring &path : paths ) command += L" " + quoted( path );
     return command;
 }
 
-wstring acrobat_command( const wstring &path ) {
-    return quoted( program_file( program::acrobat ) ) + L" /n /A \"view=FitH\" " + quoted( path );   // /n: a new window
+wstring acrobat_command( const wstring &path, int page ) {
+    wstring open_at = page > 0 ? L"page=" + std::to_wstring( page ) + L"&view=FitH" : L"view=FitH";
+    return quoted( program_file( program::acrobat ) ) + L" /n /A \"" + open_at + L"\" " + quoted( path );  // /n: a new window
 }
 
 wstring chrome_command( const vector<wstring> &addresses ) {
@@ -305,9 +307,9 @@ vector<live_window> start_and_place( const vector<planned_window> &plan, const R
         if ( window.plan.app == program::pdfcraft ) {
             if ( !window.plan.control_file.empty() )
                 CreateDirectoryW( parent_folder( window.plan.control_file ).c_str(), nullptr );
-            window.process_id = start_process( pdfcraft_command( window.plan.paths, window.plan.control_file ) );
+            window.process_id = start_process( pdfcraft_command( window.plan.paths, window.plan.control_file, window.plan.page ) );
         } else if ( window.plan.app == program::acrobat ) {
-            start_process( acrobat_command( window.plan.paths[0] ) );
+            start_process( acrobat_command( window.plan.paths[0], window.plan.page ) );
         } else if ( window.plan.app == program::notepad_pp ) {
             wstring command = notepad_command( window.plan.paths[0] );
             for ( size_t i = 1; i < window.plan.paths.size(); ++i ) command += L" " + quoted( window.plan.paths[i] );

@@ -41,7 +41,7 @@ bool needs_ticks( const setup &chosen, const layout_item &item ) {
 }
 
 vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
-                                   vector<wstring> &problems ) {
+                                   vector<wstring> &problems, int page ) {
     vector<planned_window> plan;
     wstring first_pdf;
     vector<std::pair<size_t, const layout_item *>> notes_windows;
@@ -111,11 +111,13 @@ vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstr
         // Acrobat gets a window per PDF. PdfCraft shows several as tabs unless asked to separate them.
         bool one_window_each = item.app == viewer::acrobat || ( ( item.kind == item_kind::pick || item.kind == item_kind::sequence ) && separate );
         program app = item.app == viewer::acrobat ? program::acrobat : program::pdfcraft;
+        size_t first_window = plan.size();
         if ( one_window_each ) {
             for ( const wstring &pdf : pdfs ) plan.push_back( { item.side, app, { pdf } } );
         } else {
             plan.push_back( { item.side, app, pdfs } );
         }
+        for ( size_t w = first_window; w < plan.size(); ++w ) plan[w].page = page ? page : item.page;
     }
 
     if ( plan.size() == notes_windows.size() ) {
@@ -190,7 +192,7 @@ vector<wstring> open_setups( const vector<setup_to_open> &setups ) {
     vector<vector<planned_window>> plans;
     vector<wstring> notes_paths;
     for ( const setup_to_open &each : setups ) {
-        plans.push_back( plan_setup( *each.chosen, each.picks, each.separate, problems ) );
+        plans.push_back( plan_setup( *each.chosen, each.picks, each.separate, problems, each.page ) );
         for ( const wstring &path : make_notes_files( plans.back() ) ) notes_paths.push_back( path );
     }
 

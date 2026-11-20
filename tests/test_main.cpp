@@ -35,6 +35,7 @@ void test_sequence();
 void test_decks_today();
 void test_desktop_setups();
 void test_sessions();
+void test_pages();
 
 namespace {
 
@@ -290,6 +291,7 @@ int wmain( int argument_count, wchar_t **arguments ) {
     test_decks_today();
     test_desktop_setups();
     test_sessions();
+    test_pages();
 
     if ( argument_count > 2 && wstring( arguments[1] ) == L"--panel-picture" ) save_panel_picture( arguments[2] );
     else if ( argument_count > 1 ) save_picture( canvas, arguments[1] );

@@ -19,9 +19,10 @@ bool needs_ticks( const setup &chosen, const layout_item &item );
 
 // Works out the windows to open without opening them or creating any file. A notes window's
 // path is the name notes_file would choose. A sequence item opens its ticked decks, or else
-// decks_to_open. Returns no windows when there is nothing to open.
+// decks_to_open. Returns no windows when there is nothing to open. A page above 0 is given to
+// every PdfCraft and Acrobat window in place of the page of its line.
 vector<planned_window> plan_setup( const setup &chosen, const vector<vector<wstring>> &picks, bool separate,
-                                   vector<wstring> &problems );
+                                   vector<wstring> &problems, int page = 0 );
 
 // Creates the notes files and closes old notes, then opens the plan on the setup's desktop without
 // showing it first, and shows that desktop once the windows are in place.
@@ -51,6 +52,7 @@ struct setup_to_open {
     const setup *chosen;
     vector<vector<wstring>> picks;   // as for open_setup
     bool separate;
+    int page = 0;                    // as for plan_setup
 };
 
 // Opens each setup on its own desktop while the desktop showing stays the same, then shows

@@ -18,6 +18,7 @@ struct planned_window {
     int split = 50;         // the left side's share of the screen width in percent
     bool has_frame = false; // when true, the window goes exactly to frame and is never snapped
     RECT frame{};
+    int page = 0;           // PdfCraft and Acrobat: the page to open at; 0 for the program's own choice
 };
 
 #include <windows.h>
@@ -38,11 +39,13 @@ DWORD start_process( wstring command_line );
 wstring quoted( const wstring &text );
 
 // The command line that starts PdfCraft on these PDFs in a window of its own, in Read mode,
-// fitted to width. control_file, when not empty, adds --control and that file.
-wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file );
+// fitted to width. control_file, when not empty, adds --control and that file. A page above 0
+// adds --page and that number.
+wstring pdfcraft_command( const vector<wstring> &paths, const wstring &control_file, int page = 0 );
 
-// The command line that starts Acrobat on one PDF in a new window, fitted to width.
-wstring acrobat_command( const wstring &path );
+// The command line that starts Acrobat on one PDF in a new window, fitted to width, at the page
+// when it is above 0.
+wstring acrobat_command( const wstring &path, int page = 0 );
 
 // The command line that starts Chrome on these addresses, as tabs in a new window.
 wstring chrome_command( const vector<wstring> &addresses );

@@ -11,6 +11,7 @@ struct written_item {
     item_kind kind;
     vector<wstring> paths;  // for web, the addresses
     viewer app = viewer::pdfcraft;
+    int page = 0;           // the page the PDFs open at; 0 when the line gives none
 };
 
 struct setup_block {
@@ -43,6 +44,7 @@ struct layout_item {
     item_kind kind;
     vector<wstring> paths;
     viewer app;
+    int page = 0;           // as in written_item
 };
 
 struct setup {

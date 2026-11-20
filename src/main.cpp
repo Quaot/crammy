@@ -4,6 +4,7 @@
 //   crammy --setup "ECE 150: Exam"            the launcher, on that setup
 //   crammy --setup "ECE 150: Exam" --pick F24-F F24-M [--separate]
 //   crammy --setup A --pick x --setup B --pick y   each setup on its own desktop, opened in one go
+//   crammy --setup "Math 117: Reading" --pick notes --page 121   every PDF of the setup at page 121
 //   crammy --list                             every setup
 //   crammy --list "ECE 150: Exam"             the PDFs that setup can pick
 //   crammy --check                            problems in profiles.txt
@@ -208,7 +209,7 @@ int WINAPI wWinMain( HINSTANCE, HINSTANCE, PWSTR, int ) {
     for ( const setup_request &request : command.setups ) {
         const setup *chosen = find_setup( profiles, request.title );
         if ( !chosen ) { say( L"No single setup matches '" + request.title + L"'. Try --list." ); return 1; }
-        setup_to_open each{ chosen, {}, request.separate };
+        setup_to_open each{ chosen, {}, request.separate, request.page };
         if ( !resolve_picks( *chosen, request.picks, each.picks ) ) return 1;
         to_open.push_back( each );
     }

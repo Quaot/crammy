@@ -28,7 +28,8 @@ const wchar_t *header =
     L"#   folder \"folder\"             File Explorer on that folder\r\n"
     L"#   web \"https://...\"           Google Chrome with that page; more addresses open as tabs\r\n"
     L"#\r\n"
-    L"# Add  with acrobat  at the end of a PDF line to open it in Adobe Acrobat in place of PdfCraft.\r\n";
+    L"# Add  with acrobat  at the end of a PDF line to open it in Adobe Acrobat in place of PdfCraft.\r\n"
+    L"# Add  page 121  at the end of a PDF line to open its PDFs at page 121.\r\n";
 
 const wchar_t *kind_words[] = { L"notes", L"pdf", L"tabs", L"pick", L"folder", L"newest", L"sequence", L"web" };
 
@@ -63,15 +64,41 @@ wstring first_path( const wstring &text ) {
     return paths.empty() ? L"" : paths[0];
 }
 
-// Splits "\"a.pdf\" with acrobat" into its paths part and the viewer
-viewer take_viewer( wstring &rest ) {
+// A page is a whole number from 1; 0 when the text is anything else
+int read_page( const wstring &text ) {
+    if ( text.empty() || text.size() > 6 ) return 0;
+    for ( wchar_t c : text ) if ( c < L'0' || c > L'9' ) return 0;
+    return std::stoi( text );
+}
+
+// Takes the words after the paths, such as  page 121 with acrobat, off the end of rest.
+// Words inside quotes belong to a path. problem gets what is wrong with a page, or stays "".
+void take_options( wstring &rest, viewer &app, int &page, wstring &problem ) {
     size_t last_quote = rest.rfind( L'"' );
-    size_t with = lower( rest ).rfind( L" with " );
-    if ( with == wstring::npos && starts_with( lower( rest ), L"with " ) ) with = 0;
-    if ( with == wstring::npos || ( last_quote != wstring::npos && with < last_quote ) ) return viewer::pdfcraft;
-    wstring word = lower( trim( rest.substr( with + 5 ) ) );
-    rest = rest.substr( 0, with );
-    return word == L"acrobat" ? viewer::acrobat : viewer::pdfcraft;
+    size_t position = last_quote == wstring::npos ? 0 : last_quote + 1;
+    vector<std::pair<size_t, wstring>> words;
+    while ( ( position = rest.find_first_not_of( L" \t", position ) ) != wstring::npos ) {
+        size_t end = rest.find_first_of( L" \t", position );
+        if ( end == wstring::npos ) end = rest.size();
+        words.push_back( { position, lower( rest.substr( position, end - position ) ) } );
+        position = end;
+    }
+
+    size_t first = 0;
+    while ( first < words.size() && words[first].second != L"with" && words[first].second != L"page" ) ++first;
+    if ( first == words.size() ) return;
+    for ( size_t i = first; i < words.size(); ++i ) {
+        wstring next = i + 1 < words.size() ? words[i + 1].second : L"";
+        if ( words[i].second == L"with" ) {
+            app = next == L"acrobat" ? viewer::acrobat : viewer::pdfcraft;
+            ++i;
+        } else if ( words[i].second == L"page" ) {
+            page = read_page( next );
+            if ( !page ) problem = L"page must be followed by a whole number from 1, such as  page 121";
+            if ( !next.empty() ) ++i;
+        }
+    }
+    rest = rest.substr( 0, words[first].first );
 }
 
 wstring check_count( item_kind kind, size_t count ) {
@@ -102,6 +129,7 @@ wstring resolve( const wstring &folder, const wstring &path ) {
 wstring write_item( const written_item &item ) {
     wstring line = item.side + L" = " + kind_words[ static_cast<int>( item.kind ) ];
     for ( const wstring &path : item.paths ) line += L" \"" + path + L"\"";
+    if ( item.page ) line += L" page " + std::to_wstring( item.page );
     if ( item.app == viewer::acrobat ) line += L" with acrobat";
     return line + L"\r\n";
 }
@@ -142,7 +170,7 @@ setup build_setup( const profile_block &profile, size_t profile_index, int setup
     vector<written_item> items = profile.items;
     if ( own ) items.insert( items.end(), own->items.begin(), own->items.end() );
     for ( const written_item &item : items ) {
-        layout_item resolved{ item.side, item.kind, {}, item.app };
+        layout_item resolved{ item.side, item.kind, {}, item.app, item.page };
         for ( const wstring &path : item.paths )
             resolved.paths.push_back( item.kind == item_kind::web ? path : resolve( result.root, path ) );
         result.items.push_back( resolved );
@@ -245,12 +273,17 @@ profile_book read_book( const wstring &text ) {
             book.errors.push_back( where + L"unknown window '" + word + L"' (use notes, pdf, newest, tabs, pick, sequence, folder or web)" );
             continue;
         }
-        viewer app = take_viewer( rest );
+        viewer app = viewer::pdfcraft;
+        int page = 0;
+        wstring problem;
+        take_options( rest, app, page, problem );
+        bool opens_pdfs = kind != item_kind::notes && kind != item_kind::folder && kind != item_kind::web;
+        if ( problem.empty() && page && !opens_pdfs ) problem = L"a page only goes on a line that opens PDFs";
         vector<wstring> paths = read_paths( rest );
-        wstring problem = check_count( kind, paths.size() );
+        if ( problem.empty() ) problem = check_count( kind, paths.size() );
         if ( problem.empty() && kind == item_kind::web ) problem = check_addresses( paths );
         if ( !problem.empty() ) { book.errors.push_back( where + problem ); continue; }
-        ( own ? own->items : profile->items ).push_back( { key, kind, paths, app } );
+        ( own ? own->items : profile->items ).push_back( { key, kind, paths, app, page } );
     }
     return book;
 }

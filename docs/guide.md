@@ -87,7 +87,7 @@ Problems at any step are collected as plain sentences and shown at the end; noth
 | `src/text.cpp` | String, path and file helpers |
 | `tests/test_main.cpp` | The older checks, and the calls to every `test_<area>()`; writes a picture when asked |
 | `tests/check.cpp`, `tests/check.h` | `check()`, which prints one line and counts a failure |
-| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions`, `setup_options` and `background_log` |
+| `tests/test_<area>.cpp` | The checks for one area, written from `tests/specs/<area>.md`: `existing`, `timetable`, `settings`, `subjects`, `panel`, `background`, `desktops`, `sequence`, `next_line`, `slide_watch`, `desktop_setups`, `sessions`, `setup_options`, `background_log` and `pages` |
 | `tests/specs/*.md` | One spec for each area |
 | `tests/test.cmd` | Builds the checks and runs them |
 | `windhawk/crammy-button.wh.cpp` | The Windhawk mod that shows Crammy's line on the taskbar, with the current desktop's name before it, plain, with a thin line after it; `windhawk/README.md` says how to add it |
@@ -114,6 +114,7 @@ right = newest "1 Lectures\PDF\ECE190-W*-Sum.pdf" with acrobat
 - Window lines are `side = kind "path" "path" ...`. `side` is `left`, `right` or `full`. Lines under a subject heading are shared by all its setups.
 - Kinds: `notes` (Notepad++; no path means a file named after the first PDF), `pdf` (one file), `newest` (one pattern, newest file by modified date), `tabs` (several PDFs in one PdfCraft window), `pick` (folders or files to tick from), `sequence` (the numbered decks of one folder in section order; opens the decks already opened today, as listed in `decks today.txt`; on a new day it opens the one after the place saved in `places.txt`, or shows the tick list when there is no place), `folder` (File Explorer), `web` (Google Chrome; one or more addresses, each starting with `http://` or `https://`, kept as written and never joined to the root).
 - A PDF line may end with `with acrobat`. Acrobat gets one window per PDF.
+- A PDF line (`pdf`, `newest`, `tabs`, `pick` or `sequence`) may also end with `page N`, a whole number from 1, before or after `with acrobat`; it is written back before it. The PDFs of that line open at that page. `--page N` after a `--setup` on the command line gives every PDF window of that setup the page, in place of its line's. `plan_setup` puts the page on each `planned_window`, and `pdfcraft_command` and `acrobat_command` turn it into PdfCraft's `--page N` and Acrobat's `/A "page=N&view=FitH"`. The spec is `tests/specs/pages.md`. When `--setup` with `--page` but no `--pick` shows the launcher for ticking, the page is not passed on; give `--pick` as well.
 - Paths are stored relative to the root when they are inside it. `*` works in file names. `%USERPROFILE%` and other variables are expanded.
 
 To add a setting or a kind, change `profiles.h` (the structs), `read_book` and `write_item` or `write_settings` (reading and writing), the `header` comment, `check_count` if it takes paths, and the README table. Then add a check that the new line survives a round trip.
@@ -124,7 +125,7 @@ To add a setting or a kind, change `profiles.h` (the structs), `read_book` and `
 
 | Program | Started with | Its window is found by |
 |---|---|---|
-| PdfCraft | `pdfcraft.exe --new-window --mode read "a.pdf" "b.pdf"` (from `pdfcraft_command`; several files give tabs in one window); a window Next opens for lecture decks also gets `--control <file>` | the process ID of the program started |
+| PdfCraft | `pdfcraft.exe --new-window --mode read "a.pdf" "b.pdf"` (from `pdfcraft_command`; several files give tabs in one window); a window Next opens for lecture decks also gets `--control <file>`, and a window with a page gets `--page N` | the process ID of the program started |
 | Acrobat | `Acrobat.exe /n /A "view=FitH" "file.pdf"` (from `acrobat_command`; `/n` forces a new window, `view=FitH` fits the page width) | a title containing the file name and "Adobe Acrobat"; `/n` hands off to another process, so the ID cannot be used |
 | Notepad++ | `notepad++.exe -multiInst -nosession "file.txt"` (a window of its own, from `notepad_command`; a reopened session adds its other files after the first) | a title containing any of its file names and "Notepad++" |
 | File Explorer | `explorer.exe "folder"` | window class `CabinetWClass` and the folder name in the title |
@@ -353,6 +354,7 @@ The checks never take over the mouse or keyboard and never take screenshots of t
 - A saved session knows only the PDFs a PdfCraft or Acrobat window was started with. A PDF opened later in another tab of the same window is not remembered.
 - Save and close all closes study windows the owner opened by hand too. Never run it on his real windows without his say-so.
 - Web pages are not saved by Save and close all, so a reopened session has no Chrome windows.
+- A saved session does not know which page a PDF window was on, so a reopened window starts where PdfCraft or Acrobat chooses.
 - A Chrome window that opens by itself while a setup is opening, such as one from a link clicked in another program, can be taken for the setup's window.
 - `newest` uses the modified date, so re-saving an old PDF makes it the newest.
 - When a separate copy of `crammy.exe` opens a setup with decks, the background Crammy does not learn of its windows, so a later next deck leaves the old deck window open under the new one.
